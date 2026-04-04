@@ -3,6 +3,26 @@ import { platforms, settings } from "./schema";
 
 const PLATFORMS_DATA = [
   {
+    tmdbProviderId: 8,
+    name: "Netflix",
+    slug: "netflix",
+    monthlyPrice: 7.99,
+    monthlyPriceStandard: 13.99,
+    monthlyPricePremium: 19.99,
+    isFree: false,
+    color: "#E50914",
+  },
+  {
+    tmdbProviderId: 119,
+    name: "Amazon Prime Video",
+    slug: "amazon-prime",
+    monthlyPrice: 4.99,
+    monthlyPriceStandard: 4.99,
+    monthlyPricePremium: null,
+    isFree: false,
+    color: "#00A8E1",
+  },
+  {
     tmdbProviderId: 337,
     name: "Disney+",
     slug: "disney-plus",
@@ -121,6 +141,7 @@ async function seed() {
       { key: "monthly_budget", value: "15" },
       { key: "excluded_platforms", value: "[]" },
       { key: "always_on_platforms", value: "[]" },
+      { key: "active_subscriptions", value: '["netflix","amazon-prime"]' },
     ])
     .onConflictDoNothing({ target: settings.key });
 

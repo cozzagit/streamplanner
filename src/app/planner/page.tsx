@@ -44,17 +44,30 @@ interface PlanMonth {
   withinBudget?: boolean;
 }
 
+interface ActiveSubEntry {
+  name: string;
+  slug: string;
+  color: string;
+  monthlyPrice: number;
+  seriesCovered: number;
+  coveredSeries: CoveredSeries[];
+}
+
 interface RotationData {
   plans: PlanMonth[];
+  activeSubscriptions?: ActiveSubEntry[];
   summary: {
     monthlyBudget: number;
     alwaysOnCost?: number;
+    activeSubsCost?: number;
     totalPlatformsCost: number;
     rotationMonthlyCost: number;
     monthlySavings: number;
     watchlistTotal: number;
+    seriesCoveredByActiveSubs?: number;
     platformsNeeded: number;
     alwaysOnPlatforms?: string[];
+    activeSubscriptions?: string[];
   };
   message?: string;
 }
@@ -210,6 +223,42 @@ export default function PlannerPage() {
           </p>
         </div>
       </div>
+
+      {/* Active subscriptions coverage */}
+      {data.activeSubscriptions && data.activeSubscriptions.length > 0 && (
+        <div className="p-4 rounded-xl bg-success/5 border border-success/20 space-y-3">
+          <p className="text-sm font-medium text-text-primary flex items-center gap-2">
+            <CheckCircle size={14} className="text-success" />
+            Coperte dai tuoi abbonamenti attivi
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {data.activeSubscriptions.map((sub) => (
+              <div key={sub.slug} className="flex items-center gap-3 p-3 rounded-lg bg-bg-card border border-border">
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold"
+                  style={{ backgroundColor: sub.color }}
+                >
+                  {sub.seriesCovered}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-text-primary">{sub.name}</p>
+                  <p className="text-xs text-text-secondary">
+                    {sub.coveredSeries.map((s) => s.name).join(", ")}
+                  </p>
+                </div>
+                <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-success/10 text-success font-medium">
+                  Attivo
+                </span>
+              </div>
+            ))}
+          </div>
+          {summary.seriesCoveredByActiveSubs != null && summary.seriesCoveredByActiveSubs > 0 && (
+            <p className="text-xs text-text-secondary">
+              {summary.seriesCoveredByActiveSubs} serie gia coperte — il planner ottimizza le rimanenti
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Always-on info */}
       {summary.alwaysOnPlatforms && summary.alwaysOnPlatforms.length > 0 && (

@@ -63,6 +63,15 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    let activeSubSlugs: string[] = [];
+    if (settingsMap.active_subscriptions) {
+      try {
+        activeSubSlugs = JSON.parse(settingsMap.active_subscriptions);
+      } catch {
+        // ignore invalid JSON
+      }
+    }
+
     // 2. Get all watchlist items (to_watch and watching only)
     const watchlistItems = await db
       .select()
@@ -150,14 +159,17 @@ export async function GET(req: NextRequest) {
       .filter((p) => !excludedSlugs.includes(p.slug))
       .map((p) => ({
         ...p,
-        costPerSeries: p.isFree
+        isActiveSub: activeSubSlugs.includes(p.slug),
+        costPerSeries: p.isFree || activeSubSlugs.includes(p.slug)
           ? 0
           : p.monthlyPrice / Math.max(p.seriesAvailable.length, 1),
       }));
 
-    // Identify always-on platforms
+    // Active subscriptions: user already pays, covered automatically
+    const activeSubPlatforms = scoredPlatforms.filter((p) => p.isActiveSub);
+    // Always-on: platforms the user wants to keep in rotation permanently
     const alwaysOnPlatforms = scoredPlatforms.filter((p) =>
-      alwaysOnSlugs.includes(p.slug)
+      alwaysOnSlugs.includes(p.slug) && !p.isActiveSub
     );
     const alwaysOnCost = alwaysOnPlatforms.reduce(
       (sum, p) => sum + (p.isFree ? 0 : p.monthlyPrice),
@@ -181,6 +193,18 @@ export async function GET(req: NextRequest) {
     const uncoveredSeries = new Set(
       watchlistItems.map((w) => w.series.id)
     );
+
+    // Pre-cover series available on active subscriptions (user already has them)
+    const activeSubCoverage: (typeof scoredPlatforms[0] & { coveredSeries: typeof scoredPlatforms[0]["seriesAvailable"] })[] = [];
+    for (const asp of activeSubPlatforms) {
+      const covered = asp.seriesAvailable.filter((s) =>
+        uncoveredSeries.has(s.seriesId)
+      );
+      if (covered.length > 0) {
+        covered.forEach((s) => uncoveredSeries.delete(s.seriesId));
+        activeSubCoverage.push({ ...asp, coveredSeries: covered });
+      }
+    }
 
     for (let m = 0; m < monthsAhead && uncoveredSeries.size > 0; m++) {
       const planMonth = ((now.getMonth() + m) % 12) + 1;
@@ -207,6 +231,7 @@ export async function GET(req: NextRequest) {
         .filter(
           (p) =>
             p.isFree &&
+            !p.isActiveSub &&
             !alwaysOnSlugs.includes(p.slug) &&
             p.seriesAvailable.some((s) => uncoveredSeries.has(s.seriesId))
         )
@@ -218,15 +243,15 @@ export async function GET(req: NextRequest) {
           return { ...p, coveredSeries: covered };
         });
 
-      // Find the best paid platform within remaining budget
+      // Find the best paid platform within remaining budget (exclude active subs)
       let bestPlatform: PlatformScore | null = null;
       let bestCoverage = 0;
       let bestRatio = -1;
 
       for (const platform of scoredPlatforms) {
-        if (platform.isFree || alwaysOnSlugs.includes(platform.slug)) continue;
+        if (platform.isFree || platform.isActiveSub || alwaysOnSlugs.includes(platform.slug)) continue;
 
-        // Budget constraint: skip if this platform would exceed budget
+        // Budget constraint
         if (monthCost + platform.monthlyPrice > monthlyBudget && monthlyBudget > 0) continue;
 
         const coverage = platform.seriesAvailable.filter((s) =>
@@ -301,27 +326,44 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // 7. Calculate savings
-    const totalAllPlatforms = scoredPlatforms
-      .filter((p) => !p.isFree && p.seriesAvailable.length > 0)
+    // 7. Calculate savings (exclude active subs — user already pays for those)
+    const totalRotatablePlatforms = scoredPlatforms
+      .filter((p) => !p.isFree && !p.isActiveSub && p.seriesAvailable.length > 0)
       .reduce((sum, p) => sum + p.monthlyPrice, 0);
 
     const rotationMonthlyCost =
       plans.reduce((sum, p) => sum + p.estimatedCost, 0) / Math.max(plans.length, 1);
 
+    const activeSubsCost = activeSubPlatforms.reduce(
+      (sum, p) => sum + (p.isFree ? 0 : p.monthlyPrice), 0
+    );
+
     return NextResponse.json({
       plans,
+      activeSubscriptions: activeSubCoverage.map((a) => ({
+        name: a.name,
+        slug: a.slug,
+        color: a.color,
+        monthlyPrice: a.monthlyPrice,
+        seriesCovered: a.coveredSeries.length,
+        coveredSeries: a.coveredSeries,
+      })),
       summary: {
         monthlyBudget,
         alwaysOnCost,
-        totalPlatformsCost: totalAllPlatforms,
+        activeSubsCost,
+        totalPlatformsCost: totalRotatablePlatforms,
         rotationMonthlyCost: Math.round(rotationMonthlyCost * 100) / 100,
         monthlySavings:
-          Math.round((totalAllPlatforms - rotationMonthlyCost) * 100) / 100,
+          Math.round((totalRotatablePlatforms - rotationMonthlyCost) * 100) / 100,
         watchlistTotal: watchlistItems.length,
+        seriesCoveredByActiveSubs: activeSubCoverage.reduce(
+          (s, a) => s + a.coveredSeries.length, 0
+        ),
         platformsNeeded: new Set(plans.map((p) => p.mainPlatform.platformId))
           .size,
         alwaysOnPlatforms: alwaysOnSlugs,
+        activeSubscriptions: activeSubSlugs,
       },
       scoredPlatforms,
     });

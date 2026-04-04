@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Settings, Save, Loader2, Check, Ban } from "lucide-react";
-import { TRACKED_PLATFORMS } from "@/lib/platforms";
+import { Settings, Save, Loader2, Check, Ban, CreditCard } from "lucide-react";
+import { TRACKED_PLATFORMS, DEFAULT_ACTIVE_SUBSCRIPTIONS } from "@/lib/platforms";
 
 export default function ImpostazioniPage() {
   const [budget, setBudget] = useState(15);
   const [alwaysOn, setAlwaysOn] = useState<string[]>([]);
   const [excluded, setExcluded] = useState<string[]>([]);
+  const [activeSubs, setActiveSubs] = useState<string[]>(DEFAULT_ACTIVE_SUBSCRIPTIONS);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -18,18 +19,13 @@ export default function ImpostazioniPage() {
       .then((data) => {
         if (data.monthly_budget) setBudget(Number(data.monthly_budget));
         if (data.always_on_platforms) {
-          try {
-            setAlwaysOn(JSON.parse(data.always_on_platforms));
-          } catch {
-            // ignore
-          }
+          try { setAlwaysOn(JSON.parse(data.always_on_platforms)); } catch { /* ignore */ }
         }
         if (data.excluded_platforms) {
-          try {
-            setExcluded(JSON.parse(data.excluded_platforms));
-          } catch {
-            // ignore
-          }
+          try { setExcluded(JSON.parse(data.excluded_platforms)); } catch { /* ignore */ }
+        }
+        if (data.active_subscriptions) {
+          try { setActiveSubs(JSON.parse(data.active_subscriptions)); } catch { /* ignore */ }
         }
       })
       .catch(() => {})
@@ -46,6 +42,7 @@ export default function ImpostazioniPage() {
           monthly_budget: String(budget),
           always_on_platforms: JSON.stringify(alwaysOn),
           excluded_platforms: JSON.stringify(excluded),
+          active_subscriptions: JSON.stringify(activeSubs),
         }),
       });
       setSaved(true);
@@ -55,11 +52,16 @@ export default function ImpostazioniPage() {
     }
   };
 
+  const toggleActiveSub = (slug: string) => {
+    setActiveSubs((prev) =>
+      prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug]
+    );
+  };
+
   const toggleAlwaysOn = (slug: string) => {
     setAlwaysOn((prev) =>
       prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug]
     );
-    // Remove from excluded if adding to always-on
     setExcluded((prev) => prev.filter((s) => s !== slug));
   };
 
@@ -67,13 +69,18 @@ export default function ImpostazioniPage() {
     setExcluded((prev) =>
       prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug]
     );
-    // Remove from always-on if excluding
     setAlwaysOn((prev) => prev.filter((s) => s !== slug));
   };
 
   const paidPlatforms = TRACKED_PLATFORMS.filter((p) => !p.isFree);
-  const alwaysOnCost = paidPlatforms
+  // Platforms available for rotation = paid, not already active subscriptions
+  const rotatablePlatforms = paidPlatforms.filter((p) => !activeSubs.includes(p.slug));
+
+  const alwaysOnCost = rotatablePlatforms
     .filter((p) => alwaysOn.includes(p.slug))
+    .reduce((sum, p) => sum + p.monthlyPrice, 0);
+  const activeSubsCost = paidPlatforms
+    .filter((p) => activeSubs.includes(p.slug))
     .reduce((sum, p) => sum + p.monthlyPrice, 0);
   const remainingBudget = Math.max(0, budget - alwaysOnCost);
 
@@ -92,12 +99,51 @@ export default function ImpostazioniPage() {
         Impostazioni
       </h1>
 
+      {/* Active Subscriptions */}
+      <div className="p-6 rounded-xl bg-bg-card border border-border space-y-4">
+        <h2 className="font-semibold text-text-primary flex items-center gap-2">
+          <CreditCard size={16} />
+          I Miei Abbonamenti
+        </h2>
+        <p className="text-sm text-text-secondary">
+          Seleziona le piattaforme a cui sei gia abbonato. Queste saranno escluse
+          dalla rotazione e mostrate con il badge &quot;Attivo&quot;.
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          {paidPlatforms.map((p) => (
+            <button
+              key={p.slug}
+              onClick={() => toggleActiveSub(p.slug)}
+              className={`flex items-center gap-2 p-3 rounded-lg border text-sm font-medium transition-colors ${
+                activeSubs.includes(p.slug)
+                  ? "border-success bg-success/10 text-success"
+                  : "border-border bg-bg-secondary text-text-secondary hover:border-success/50"
+              }`}
+            >
+              <span>{p.icon}</span>
+              <span>{p.name}</span>
+              <span className="ml-auto text-xs">
+                &euro;{p.monthlyPrice.toFixed(2)}/m
+              </span>
+              {activeSubs.includes(p.slug) && (
+                <Check size={14} className="text-success" />
+              )}
+            </button>
+          ))}
+        </div>
+        {activeSubsCost > 0 && (
+          <div className="text-xs text-text-secondary bg-bg-secondary p-3 rounded-lg">
+            Spesa abbonamenti attivi: &euro;{activeSubsCost.toFixed(2)}/mese
+          </div>
+        )}
+      </div>
+
       {/* Budget */}
       <div className="p-6 rounded-xl bg-bg-card border border-border space-y-4">
-        <h2 className="font-semibold text-text-primary">Budget Mensile</h2>
+        <h2 className="font-semibold text-text-primary">Budget Rotazione</h2>
         <p className="text-sm text-text-secondary">
-          Quanto vuoi spendere al massimo al mese per le piattaforme (esclusi
-          Netflix e Prime che hai gia)
+          Budget mensile aggiuntivo per le piattaforme in rotazione
+          (esclusi i tuoi abbonamenti attivi).
         </p>
         <div className="flex items-center gap-4">
           <input
@@ -120,77 +166,81 @@ export default function ImpostazioniPage() {
         {alwaysOnCost > 0 && (
           <div className="text-xs text-text-secondary bg-bg-secondary p-3 rounded-lg">
             Piattaforme sempre attive: &euro;{alwaysOnCost.toFixed(2)}/mese
-            &middot; Budget disponibile per rotazione: &euro;{remainingBudget.toFixed(2)}/mese
+            &middot; Disponibile per rotazione: &euro;{remainingBudget.toFixed(2)}/mese
           </div>
         )}
       </div>
 
-      {/* Always-on platforms */}
-      <div className="p-6 rounded-xl bg-bg-card border border-border space-y-4">
-        <h2 className="font-semibold text-text-primary">
-          Piattaforme &quot;Sempre Attive&quot;
-        </h2>
-        <p className="text-sm text-text-secondary">
-          Piattaforme che vuoi mantenere sempre, indipendentemente dalla
-          rotazione. Il planner ottimizzera le rimanenti.
-        </p>
-        <div className="grid grid-cols-2 gap-2">
-          {paidPlatforms
-            .filter((p) => !excluded.includes(p.slug))
-            .map((p) => (
-              <button
-                key={p.slug}
-                onClick={() => toggleAlwaysOn(p.slug)}
-                className={`flex items-center gap-2 p-3 rounded-lg border text-sm font-medium transition-colors ${
-                  alwaysOn.includes(p.slug)
-                    ? "border-accent bg-accent/10 text-accent-light"
-                    : "border-border bg-bg-secondary text-text-secondary hover:border-accent/50"
-                }`}
-              >
-                <span>{p.icon}</span>
-                <span>{p.name}</span>
-                <span className="ml-auto text-xs">
-                  &euro;{p.monthlyPrice.toFixed(2)}/m
-                </span>
-                {alwaysOn.includes(p.slug) && (
-                  <Check size={14} className="text-accent" />
-                )}
-              </button>
-            ))}
+      {/* Always-on platforms (only non-active-subscription platforms) */}
+      {rotatablePlatforms.length > 0 && (
+        <div className="p-6 rounded-xl bg-bg-card border border-border space-y-4">
+          <h2 className="font-semibold text-text-primary">
+            Piattaforme &quot;Sempre Attive&quot;
+          </h2>
+          <p className="text-sm text-text-secondary">
+            Piattaforme (non gia abbonate) che vuoi mantenere sempre attive
+            nella rotazione.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {rotatablePlatforms
+              .filter((p) => !excluded.includes(p.slug))
+              .map((p) => (
+                <button
+                  key={p.slug}
+                  onClick={() => toggleAlwaysOn(p.slug)}
+                  className={`flex items-center gap-2 p-3 rounded-lg border text-sm font-medium transition-colors ${
+                    alwaysOn.includes(p.slug)
+                      ? "border-accent bg-accent/10 text-accent-light"
+                      : "border-border bg-bg-secondary text-text-secondary hover:border-accent/50"
+                  }`}
+                >
+                  <span>{p.icon}</span>
+                  <span>{p.name}</span>
+                  <span className="ml-auto text-xs">
+                    &euro;{p.monthlyPrice.toFixed(2)}/m
+                  </span>
+                  {alwaysOn.includes(p.slug) && (
+                    <Check size={14} className="text-accent" />
+                  )}
+                </button>
+              ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Excluded platforms */}
-      <div className="p-6 rounded-xl bg-bg-card border border-border space-y-4">
-        <h2 className="font-semibold text-text-primary flex items-center gap-2">
-          <Ban size={16} />
-          Piattaforme Escluse
-        </h2>
-        <p className="text-sm text-text-secondary">
-          Piattaforme che non vuoi mai nel piano di rotazione.
-        </p>
-        <div className="grid grid-cols-2 gap-2">
-          {paidPlatforms
-            .filter((p) => !alwaysOn.includes(p.slug))
-            .map((p) => (
-              <button
-                key={p.slug}
-                onClick={() => toggleExcluded(p.slug)}
-                className={`flex items-center gap-2 p-3 rounded-lg border text-sm font-medium transition-colors ${
-                  excluded.includes(p.slug)
-                    ? "border-danger bg-danger/10 text-danger"
-                    : "border-border bg-bg-secondary text-text-secondary hover:border-danger/50"
-                }`}
-              >
-                <span>{p.icon}</span>
-                <span>{p.name}</span>
-                {excluded.includes(p.slug) && (
-                  <Ban size={14} className="text-danger" />
-                )}
-              </button>
-            ))}
+      {rotatablePlatforms.length > 0 && (
+        <div className="p-6 rounded-xl bg-bg-card border border-border space-y-4">
+          <h2 className="font-semibold text-text-primary flex items-center gap-2">
+            <Ban size={16} />
+            Piattaforme Escluse
+          </h2>
+          <p className="text-sm text-text-secondary">
+            Piattaforme che non vuoi mai nel piano di rotazione.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {rotatablePlatforms
+              .filter((p) => !alwaysOn.includes(p.slug))
+              .map((p) => (
+                <button
+                  key={p.slug}
+                  onClick={() => toggleExcluded(p.slug)}
+                  className={`flex items-center gap-2 p-3 rounded-lg border text-sm font-medium transition-colors ${
+                    excluded.includes(p.slug)
+                      ? "border-danger bg-danger/10 text-danger"
+                      : "border-border bg-bg-secondary text-text-secondary hover:border-danger/50"
+                  }`}
+                >
+                  <span>{p.icon}</span>
+                  <span>{p.name}</span>
+                  {excluded.includes(p.slug) && (
+                    <Ban size={14} className="text-danger" />
+                  )}
+                </button>
+              ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Info */}
       <div className="p-6 rounded-xl bg-bg-card border border-border space-y-2">
@@ -199,10 +249,6 @@ export default function ImpostazioniPage() {
           StreamPlanner usa i dati di TMDB (The Movie Database) per le
           informazioni sulle serie TV e JustWatch per la disponibilita sulle
           piattaforme in Italia.
-        </p>
-        <p className="text-sm text-text-secondary">
-          Netflix e Amazon Prime Video sono esclusi dal planner perche li hai
-          gia.
         </p>
         <div className="flex gap-4 mt-4">
           <span className="text-xs text-text-secondary/50">

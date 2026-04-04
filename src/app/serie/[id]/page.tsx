@@ -27,17 +27,20 @@ export default function SerieDetailPage({
   const [loading, setLoading] = useState(true);
   const [inWatchlist, setInWatchlist] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [activeSubs, setActiveSubs] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchDetail = async () => {
       setLoading(true);
       try {
-        const [detailRes, watchlistRes] = await Promise.all([
+        const [detailRes, watchlistRes, settingsRes] = await Promise.all([
           fetch(`/api/tmdb/series/${id}`),
           fetch("/api/watchlist"),
+          fetch("/api/settings"),
         ]);
         const detailData = await detailRes.json();
         const watchlistData = await watchlistRes.json();
+        const settingsData = await settingsRes.json();
 
         setDetail(detailData);
         if (Array.isArray(watchlistData)) {
@@ -47,6 +50,9 @@ export default function SerieDetailPage({
                 w.series.tmdbId === Number(id)
             )
           );
+        }
+        if (settingsData.active_subscriptions) {
+          try { setActiveSubs(JSON.parse(settingsData.active_subscriptions)); } catch { /* ignore */ }
         }
       } catch {
         setDetail(null);
@@ -245,10 +251,13 @@ export default function SerieDetailPage({
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
             {allProviders.map((p) => {
               const platformInfo = getPlatformByTmdbId(p.provider_id);
+              const isActive = platformInfo && activeSubs.includes(platformInfo.slug);
               return (
                 <div
                   key={`${p.provider_id}-${p.type}`}
-                  className="flex items-center gap-3 p-4 rounded-xl bg-bg-card border border-border"
+                  className={`flex items-center gap-3 p-4 rounded-xl bg-bg-card border ${
+                    isActive ? "border-success/50" : "border-border"
+                  }`}
                 >
                   {p.logo_path && (
                     <Image
@@ -259,17 +268,25 @@ export default function SerieDetailPage({
                       className="rounded-lg"
                     />
                   )}
-                  <div>
-                    <p className="font-medium text-text-primary">
+                  <div className="flex-1">
+                    <p className="font-medium text-text-primary flex items-center gap-2">
                       {p.provider_name}
+                      {isActive && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/10 text-success font-bold">
+                          ATTIVO
+                        </span>
+                      )}
                     </p>
                     <p className="text-xs text-text-secondary">{p.type}</p>
-                    {platformInfo && (
+                    {platformInfo && !isActive && (
                       <p className="text-xs text-accent-light">
                         {platformInfo.isFree
                           ? "Gratis"
-                          : `da ${platformInfo.monthlyPrice.toFixed(2)}/mese`}
+                          : `da \u20AC${platformInfo.monthlyPrice.toFixed(2)}/mese`}
                       </p>
+                    )}
+                    {isActive && (
+                      <p className="text-xs text-success">Hai gia questo abbonamento</p>
                     )}
                   </div>
                 </div>

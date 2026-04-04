@@ -15,6 +15,24 @@ export interface PlatformConfig {
 
 export const TRACKED_PLATFORMS: PlatformConfig[] = [
   {
+    tmdbId: 8,
+    name: "Netflix",
+    slug: "netflix",
+    color: "#E50914",
+    monthlyPrice: 7.99,
+    isFree: false,
+    icon: "🎬",
+  },
+  {
+    tmdbId: 119,
+    name: "Amazon Prime Video",
+    slug: "amazon-prime",
+    color: "#00A8E1",
+    monthlyPrice: 4.99,
+    isFree: false,
+    icon: "📦",
+  },
+  {
     tmdbId: 337,
     name: "Disney+",
     slug: "disney-plus",
@@ -106,11 +124,11 @@ export const TRACKED_PLATFORMS: PlatformConfig[] = [
   },
 ];
 
-/** Provider IDs the user already has — excluded from rotation suggestions */
-export const USER_OWNED_PROVIDER_IDS = [8, 9, 119]; // Netflix, Amazon Prime
-
 /** All tracked provider IDs for filtering */
 export const TRACKED_PROVIDER_IDS = TRACKED_PLATFORMS.map((p) => p.tmdbId);
+
+/** Default active subscription slugs for new users */
+export const DEFAULT_ACTIVE_SUBSCRIPTIONS = ["netflix", "amazon-prime"];
 
 export function getPlatformByTmdbId(tmdbId: number): PlatformConfig | undefined {
   return TRACKED_PLATFORMS.find((p) => p.tmdbId === tmdbId);

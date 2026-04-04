@@ -18,12 +18,14 @@ interface RotationSummary {
   summary: {
     monthlyBudget: number;
     alwaysOnCost?: number;
+    activeSubsCost?: number;
     totalPlatformsCost: number;
     rotationMonthlyCost: number;
     monthlySavings: number;
     watchlistTotal: number;
     platformsNeeded: number;
     alwaysOnPlatforms?: string[];
+    activeSubscriptions?: string[];
   };
   scoredPlatforms: {
     name: string;
@@ -31,6 +33,7 @@ interface RotationSummary {
     color: string;
     monthlyPrice: number;
     isFree: boolean;
+    isActiveSub?: boolean;
     seriesAvailable: { name: string }[];
     score: number;
     costPerSeries: number;
@@ -213,12 +216,13 @@ export default function CostiPage() {
             const seriesCount = scored_p?.seriesAvailable.length || 0;
             const costPerSeries = scored_p?.costPerSeries;
             const isAlwaysOn = summary.alwaysOnPlatforms?.includes(p.slug);
+            const isActiveSub = summary.activeSubscriptions?.includes(p.slug);
 
             return (
               <div
                 key={p.slug}
                 className={`flex items-center gap-4 p-4 rounded-xl bg-bg-card border ${
-                  isAlwaysOn ? "border-accent/40" : "border-border"
+                  isActiveSub ? "border-success/40" : isAlwaysOn ? "border-accent/40" : "border-border"
                 }`}
               >
                 <div
@@ -230,7 +234,12 @@ export default function CostiPage() {
                 <div className="flex-1">
                   <p className="font-medium text-text-primary flex items-center gap-2">
                     {p.name}
-                    {isAlwaysOn && (
+                    {isActiveSub && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/10 text-success font-bold">
+                        ATTIVO
+                      </span>
+                    )}
+                    {isAlwaysOn && !isActiveSub && (
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent/10 text-accent-light font-medium">
                         sempre attiva
                       </span>
