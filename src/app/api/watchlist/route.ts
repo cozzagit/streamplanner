@@ -1,19 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { watchlist, series, seriesPlatforms, platforms } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { getSeriesDetail, getItalyProviders } from "@/lib/tmdb";
+import { getSessionUser, unauthorized } from "@/lib/get-user";
 
 // GET — lista watchlist con dettagli serie e piattaforme
 export async function GET() {
+  const user = await getSessionUser();
+  if (!user) return unauthorized();
+
   try {
     const items = await db
       .select()
       .from(watchlist)
       .innerJoin(series, eq(watchlist.seriesId, series.id))
+      .where(eq(watchlist.userId, user.id))
       .orderBy(desc(watchlist.addedAt));
 
-    // Per ogni serie, recupera le piattaforme
     const result = await Promise.all(
       items.map(async (item) => {
         const platformLinks = await db
@@ -48,6 +52,9 @@ export async function GET() {
 
 // POST — aggiungi serie alla watchlist
 export async function POST(req: NextRequest) {
+  const user = await getSessionUser();
+  if (!user) return unauthorized();
+
   try {
     const body = await req.json();
     const { tmdbId, priority = "medium" } = body;
@@ -56,7 +63,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "tmdbId richiesto" }, { status: 400 });
     }
 
-    // Fetch dettagli da TMDB e salva/aggiorna in DB
     const detail = await getSeriesDetail(tmdbId);
     const italyProviders = getItalyProviders(detail);
 
@@ -102,16 +108,12 @@ export async function POST(req: NextRequest) {
     // Sync piattaforme Italia
     if (italyProviders) {
       const allProviders = [
-        ...(italyProviders.flatrate || []).map((p) => ({
-          ...p,
-          type: "flatrate",
-        })),
+        ...(italyProviders.flatrate || []).map((p) => ({ ...p, type: "flatrate" })),
         ...(italyProviders.free || []).map((p) => ({ ...p, type: "free" })),
         ...(italyProviders.ads || []).map((p) => ({ ...p, type: "ads" })),
       ];
 
       for (const provider of allProviders) {
-        // Find matching platform in our DB
         const [platform] = await db
           .select()
           .from(platforms)
@@ -131,10 +133,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Add to watchlist
+    // Add to watchlist for this user
     const [watchlistItem] = await db
       .insert(watchlist)
       .values({
+        userId: user.id,
         seriesId: seriesRecord.id,
         priority: priority as "low" | "medium" | "high",
       })
@@ -156,6 +159,9 @@ export async function POST(req: NextRequest) {
 
 // DELETE — rimuovi dalla watchlist
 export async function DELETE(req: NextRequest) {
+  const user = await getSessionUser();
+  if (!user) return unauthorized();
+
   try {
     const { tmdbId } = await req.json();
 
@@ -163,7 +169,6 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "tmdbId richiesto" }, { status: 400 });
     }
 
-    // Find series by tmdbId
     const [seriesRecord] = await db
       .select()
       .from(series)
@@ -171,7 +176,14 @@ export async function DELETE(req: NextRequest) {
       .limit(1);
 
     if (seriesRecord) {
-      await db.delete(watchlist).where(eq(watchlist.seriesId, seriesRecord.id));
+      await db
+        .delete(watchlist)
+        .where(
+          and(
+            eq(watchlist.seriesId, seriesRecord.id),
+            eq(watchlist.userId, user.id)
+          )
+        );
     }
 
     return NextResponse.json({ success: true });

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession, signOut } from "next-auth/react";
 import {
   Compass,
   Search,
@@ -13,6 +14,8 @@ import {
   Menu,
   X,
   Tv,
+  LogOut,
+  User,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -28,7 +31,23 @@ const NAV_ITEMS = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { data: session, status } = useSession();
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Don't show sidebar on login/register pages
+  if (pathname === "/login" || pathname === "/registrati") {
+    return null;
+  }
+
+  // Don't show sidebar while loading auth
+  if (status === "loading") {
+    return null;
+  }
+
+  // Redirect to login if not authenticated
+  if (status === "unauthenticated") {
+    return null;
+  }
 
   return (
     <>
@@ -95,12 +114,30 @@ export function Sidebar() {
           })}
         </nav>
 
-        {/* Footer */}
-        <div className="p-4 border-t border-border">
-          <div className="text-xs text-text-secondary space-y-1">
-            <p>Dati da TMDB</p>
-            <p>Netflix e Prime esclusi</p>
-          </div>
+        {/* User footer */}
+        <div className="p-4 border-t border-border space-y-3">
+          {session?.user && (
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center">
+                <User size={14} className="text-accent-light" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-text-primary truncate">
+                  {session.user.name}
+                </p>
+                <p className="text-xs text-text-secondary truncate">
+                  {session.user.email}
+                </p>
+              </div>
+            </div>
+          )}
+          <button
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm text-text-secondary hover:text-danger hover:bg-danger/10 transition-colors"
+          >
+            <LogOut size={16} />
+            Esci
+          </button>
         </div>
       </aside>
     </>

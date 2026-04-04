@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { watchlist } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
+import { getSessionUser, unauthorized } from "@/lib/get-user";
 
 // PATCH — update watchlist item (status, priority, progress)
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const user = await getSessionUser();
+  if (!user) return unauthorized();
+
   const { id } = await params;
 
   try {
@@ -25,7 +29,7 @@ export async function PATCH(
     const [updated] = await db
       .update(watchlist)
       .set(updates)
-      .where(eq(watchlist.id, id))
+      .where(and(eq(watchlist.id, id), eq(watchlist.userId, user.id)))
       .returning();
 
     return NextResponse.json(updated);

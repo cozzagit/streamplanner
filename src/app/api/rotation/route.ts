@@ -9,6 +9,7 @@ import {
   settings,
 } from "@/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
+import { getSessionUser, unauthorized } from "@/lib/get-user";
 
 interface PlatformScore {
   platformId: string;
@@ -31,11 +32,17 @@ interface PlatformScore {
 
 // GET — calcola la rotation ottimale
 export async function GET(req: NextRequest) {
+  const user = await getSessionUser();
+  if (!user) return unauthorized();
+
   const monthsAhead = Number(req.nextUrl.searchParams.get("months") || "3");
 
   try {
-    // 1. Get all settings
-    const allSettings = await db.select().from(settings);
+    // 1. Get all settings for this user
+    const allSettings = await db
+      .select()
+      .from(settings)
+      .where(eq(settings.userId, user.id));
     const settingsMap: Record<string, string> = {};
     allSettings.forEach((s) => {
       settingsMap[s.key] = s.value;
@@ -72,12 +79,17 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 2. Get all watchlist items (to_watch and watching only)
+    // 2. Get all watchlist items (to_watch and watching only) for this user
     const watchlistItems = await db
       .select()
       .from(watchlist)
       .innerJoin(series, eq(watchlist.seriesId, series.id))
-      .where(inArray(watchlist.status, ["to_watch", "watching"]));
+      .where(
+        and(
+          eq(watchlist.userId, user.id),
+          inArray(watchlist.status, ["to_watch", "watching"])
+        )
+      );
 
     if (watchlistItems.length === 0) {
       return NextResponse.json({
@@ -378,6 +390,9 @@ export async function GET(req: NextRequest) {
 
 // POST — conferma un piano mensile
 export async function POST(req: NextRequest) {
+  const user = await getSessionUser();
+  if (!user) return unauthorized();
+
   try {
     const body = await req.json();
     const { month, year, platformId, estimatedCost, seriesCount, reason } = body;
@@ -385,6 +400,7 @@ export async function POST(req: NextRequest) {
     const [plan] = await db
       .insert(rotationPlans)
       .values({
+        userId: user.id,
         month,
         year,
         platformId,

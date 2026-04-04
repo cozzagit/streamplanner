@@ -1,5 +1,5 @@
 import { db } from "./index";
-import { platforms, settings } from "./schema";
+import { platforms } from "./schema";
 
 const PLATFORMS_DATA = [
   {
@@ -133,17 +133,6 @@ async function seed() {
       .values(p)
       .onConflictDoNothing({ target: platforms.tmdbProviderId });
   }
-
-  // Default settings
-  await db
-    .insert(settings)
-    .values([
-      { key: "monthly_budget", value: "15" },
-      { key: "excluded_platforms", value: "[]" },
-      { key: "always_on_platforms", value: "[]" },
-      { key: "active_subscriptions", value: '["netflix","amazon-prime"]' },
-    ])
-    .onConflictDoNothing({ target: settings.key });
 
   console.log("Seed complete!");
   process.exit(0);

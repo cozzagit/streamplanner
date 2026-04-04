@@ -26,6 +26,20 @@ export const subscriptionStatusEnum = pgEnum("subscription_status", [
   "cancelled",
 ]);
 
+// ─── Users ───────────────────────────────────────────────────
+export const users = pgTable("users", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 // ─── Platforms ────────────────────────────────────────────────
 export const platforms = pgTable("platforms", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -58,14 +72,14 @@ export const series = pgTable("series", {
   backdropPath: text("backdrop_path"),
   firstAirDate: text("first_air_date"),
   lastAirDate: text("last_air_date"),
-  status: text("status"), // Returning Series, Ended, etc.
+  status: text("status"),
   voteAverage: real("vote_average"),
   voteCount: integer("vote_count"),
   popularity: real("popularity"),
   numberOfSeasons: integer("number_of_seasons"),
   numberOfEpisodes: integer("number_of_episodes"),
-  genres: text("genres"), // JSON string array
-  networks: text("networks"), // JSON string array
+  genres: text("genres"),
+  networks: text("networks"),
   lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
@@ -86,7 +100,7 @@ export const seriesPlatforms = pgTable(
     platformId: uuid("platform_id")
       .notNull()
       .references(() => platforms.id, { onDelete: "cascade" }),
-    monetizationType: text("monetization_type").notNull().default("flatrate"), // flatrate, free, ads, rent, buy
+    monetizationType: text("monetization_type").notNull().default("flatrate"),
     lastCheckedAt: timestamp("last_checked_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -100,11 +114,14 @@ export const seriesPlatforms = pgTable(
   ]
 );
 
-// ─── Watchlist ───────────────────────────────────────────────
+// ─── Watchlist (per user) ───────────────────────────────────
 export const watchlist = pgTable(
   "watchlist",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     seriesId: uuid("series_id")
       .notNull()
       .references(() => series.id, { onDelete: "cascade" }),
@@ -120,17 +137,22 @@ export const watchlist = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (table) => [uniqueIndex("watchlist_series_unique").on(table.seriesId)]
+  (table) => [
+    uniqueIndex("watchlist_user_series_unique").on(table.userId, table.seriesId),
+  ]
 );
 
 // ─── User Subscriptions (current state) ─────────────────────
 export const subscriptions = pgTable("subscriptions", {
   id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
   platformId: uuid("platform_id")
     .notNull()
     .references(() => platforms.id, { onDelete: "cascade" }),
   status: subscriptionStatusEnum("status").notNull().default("active"),
-  tier: text("tier").default("standard"), // cheapest, standard, premium
+  tier: text("tier").default("standard"),
   monthlyCost: real("monthly_cost"),
   startedAt: timestamp("started_at", { withTimezone: true }),
   pausedAt: timestamp("paused_at", { withTimezone: true }),
@@ -142,10 +164,13 @@ export const subscriptions = pgTable("subscriptions", {
     .defaultNow(),
 });
 
-// ─── Rotation Plans ──────────────────────────────────────────
+// ─── Rotation Plans (per user) ──────────────────────────────
 export const rotationPlans = pgTable("rotation_plans", {
   id: uuid("id").primaryKey().defaultRandom(),
-  month: integer("month").notNull(), // 1-12
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  month: integer("month").notNull(),
   year: integer("year").notNull(),
   platformId: uuid("platform_id")
     .notNull()
@@ -153,8 +178,8 @@ export const rotationPlans = pgTable("rotation_plans", {
   isRecommended: boolean("is_recommended").notNull().default(false),
   isConfirmed: boolean("is_confirmed").notNull().default(false),
   estimatedCost: real("estimated_cost"),
-  reason: text("reason"), // why this platform this month
-  seriesCount: integer("series_count").default(0), // how many watchlist series available
+  reason: text("reason"),
+  seriesCount: integer("series_count").default(0),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -179,12 +204,21 @@ export const upcomingEpisodes = pgTable("upcoming_episodes", {
     .defaultNow(),
 });
 
-// ─── Monthly Budget Settings ─────────────────────────────────
-export const settings = pgTable("settings", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  key: text("key").notNull().unique(),
-  value: text("value").notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
+// ─── User Settings (per user, key-value) ────────────────────
+export const settings = pgTable(
+  "settings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    value: text("value").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("settings_user_key_unique").on(table.userId, table.key),
+  ]
+);

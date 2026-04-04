@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { settings } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
+import { getSessionUser, unauthorized } from "@/lib/get-user";
 
 export async function GET() {
+  const user = await getSessionUser();
+  if (!user) return unauthorized();
+
   try {
-    const allSettings = await db.select().from(settings);
+    const allSettings = await db
+      .select()
+      .from(settings)
+      .where(eq(settings.userId, user.id));
+
     const result: Record<string, string> = {};
     allSettings.forEach((s) => {
       result[s.key] = s.value;
@@ -18,15 +26,18 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const user = await getSessionUser();
+  if (!user) return unauthorized();
+
   try {
     const body = await req.json();
 
     for (const [key, value] of Object.entries(body)) {
       await db
         .insert(settings)
-        .values({ key, value: String(value) })
+        .values({ userId: user.id, key, value: String(value) })
         .onConflictDoUpdate({
-          target: settings.key,
+          target: [settings.userId, settings.key],
           set: { value: String(value), updatedAt: new Date() },
         });
     }
