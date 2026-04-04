@@ -1,65 +1,172 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useState, useEffect, useCallback } from "react";
+import { PlatformFilter } from "@/components/platform-filter";
+import { SeriesGrid } from "@/components/series-grid";
+import { TrendingUp, Sparkles, Clock } from "lucide-react";
+import type { TMDBSeries } from "@/lib/tmdb";
+
+type Tab = "trending" | "new" | "top";
+
+export default function EsploraPage() {
+  const [tab, setTab] = useState<Tab>("trending");
+  const [platform, setPlatform] = useState<number | null>(null);
+  const [seriesList, setSeriesList] = useState<TMDBSeries[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [watchlistIds, setWatchlistIds] = useState<Set<number>>(new Set());
+
+  // Fetch watchlist IDs
+  useEffect(() => {
+    fetch("/api/watchlist")
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setWatchlistIds(new Set(data.map((d: { series: { tmdbId: number } }) => d.series.tmdbId)));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Fetch series
+  const fetchSeries = useCallback(async () => {
+    setLoading(true);
+    try {
+      let url: string;
+      if (platform) {
+        const sortBy =
+          tab === "trending"
+            ? "popularity.desc"
+            : tab === "new"
+            ? "first_air_date.desc"
+            : "vote_average.desc";
+        const params = new URLSearchParams({
+          provider: String(platform),
+          page: String(page),
+          sort: sortBy,
+        });
+        if (tab === "top") params.set("minVote", "7");
+        if (tab === "new") {
+          const d = new Date();
+          d.setMonth(d.getMonth() - 3);
+          params.set("from", d.toISOString().split("T")[0]);
+        }
+        url = `/api/tmdb/discover?${params}`;
+      } else {
+        url = `/api/tmdb/trending?page=${page}&window=${
+          tab === "trending" ? "week" : "day"
+        }`;
+      }
+
+      const res = await fetch(url);
+      const data = await res.json();
+      setSeriesList(data.results || []);
+      setTotalPages(data.total_pages || 1);
+    } catch {
+      setSeriesList([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [tab, platform, page]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [tab, platform]);
+
+  useEffect(() => {
+    fetchSeries();
+  }, [fetchSeries]);
+
+  const toggleWatchlist = async (tmdbId: number) => {
+    if (watchlistIds.has(tmdbId)) {
+      await fetch("/api/watchlist", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tmdbId }),
+      });
+      setWatchlistIds((prev) => {
+        const next = new Set(prev);
+        next.delete(tmdbId);
+        return next;
+      });
+    } else {
+      await fetch("/api/watchlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tmdbId }),
+      });
+      setWatchlistIds((prev) => new Set(prev).add(tmdbId));
+    }
+  };
+
+  const TABS = [
+    { key: "trending" as Tab, label: "Trending", icon: TrendingUp },
+    { key: "new" as Tab, label: "Novita", icon: Sparkles },
+    { key: "top" as Tab, label: "Top Rated", icon: Clock },
+  ];
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-text-primary">Esplora</h1>
+        <p className="text-text-secondary mt-1">
+          Scopri le migliori serie TV disponibili sulle piattaforme streaming
+        </p>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-2">
+        {TABS.map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              tab === key
+                ? "bg-accent text-white"
+                : "bg-bg-card text-text-secondary hover:text-text-primary"
+            }`}
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            <Icon size={16} />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Platform filter */}
+      <PlatformFilter selected={platform} onChange={setPlatform} />
+
+      {/* Grid */}
+      <SeriesGrid
+        series={seriesList}
+        watchlistIds={watchlistIds}
+        onToggleWatchlist={toggleWatchlist}
+        loading={loading}
+      />
+
+      {/* Pagination */}
+      {!loading && totalPages > 1 && (
+        <div className="flex items-center justify-center gap-4 pt-4">
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1}
+            className="px-4 py-2 rounded-lg bg-bg-card border border-border text-sm disabled:opacity-40 hover:bg-bg-card-hover transition-colors"
           >
-            Documentation
-          </a>
+            Precedente
+          </button>
+          <span className="text-sm text-text-secondary">
+            Pagina {page} di {Math.min(totalPages, 500)}
+          </span>
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page >= totalPages}
+            className="px-4 py-2 rounded-lg bg-bg-card border border-border text-sm disabled:opacity-40 hover:bg-bg-card-hover transition-colors"
+          >
+            Successiva
+          </button>
         </div>
-      </main>
+      )}
     </div>
   );
 }
