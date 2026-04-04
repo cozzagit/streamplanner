@@ -132,6 +132,11 @@ export default function RegisterPage() {
             Accedi
           </Link>
         </p>
+        <p className="text-center">
+          <Link href="/landing" className="text-xs text-text-secondary/50 hover:text-text-secondary transition-colors">
+            Scopri StreamPlanner
+          </Link>
+        </p>
       </div>
     </div>
   );

@@ -97,6 +97,11 @@ export default function LoginPage() {
             Registrati
           </Link>
         </p>
+        <p className="text-center">
+          <Link href="/landing" className="text-xs text-text-secondary/50 hover:text-text-secondary transition-colors">
+            Cos&apos;e StreamPlanner?
+          </Link>
+        </p>
       </div>
     </div>
   );

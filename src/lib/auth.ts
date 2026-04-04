@@ -59,13 +59,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
     authorized({ auth: session, request }) {
       const isLoggedIn = !!session?.user;
-      const isAuthPage =
-        request.nextUrl.pathname.startsWith("/login") ||
-        request.nextUrl.pathname.startsWith("/registrati");
-      const isApiAuth = request.nextUrl.pathname.startsWith("/api/auth");
+      const path = request.nextUrl.pathname;
+      const isPublic =
+        path.startsWith("/login") ||
+        path.startsWith("/registrati") ||
+        path.startsWith("/landing") ||
+        path.startsWith("/api/auth");
 
-      if (isApiAuth) return true;
-      if (isAuthPage) return true;
+      if (isPublic) return true;
       return isLoggedIn;
     },
   },
