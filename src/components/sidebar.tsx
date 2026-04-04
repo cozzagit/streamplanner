@@ -20,7 +20,7 @@ import {
 import { useState } from "react";
 
 const NAV_ITEMS = [
-  { href: "/", label: "Esplora", icon: Compass },
+  { href: "/esplora", label: "Esplora", icon: Compass },
   { href: "/cerca", label: "Cerca", icon: Search },
   { href: "/watchlist", label: "Watchlist", icon: List },
   { href: "/planner", label: "Rotation Planner", icon: RotateCcw },

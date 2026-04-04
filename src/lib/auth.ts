@@ -61,6 +61,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       const isLoggedIn = !!session?.user;
       const path = request.nextUrl.pathname;
       const isPublic =
+        path === "/" ||
         path.startsWith("/login") ||
         path.startsWith("/registrati") ||
         path.startsWith("/landing") ||

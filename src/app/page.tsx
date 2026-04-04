@@ -1,172 +1,398 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { PlatformFilter } from "@/components/platform-filter";
-import { SeriesGrid } from "@/components/series-grid";
-import { TrendingUp, Sparkles, Clock } from "lucide-react";
-import type { TMDBSeries } from "@/lib/tmdb";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import Link from "next/link";
+import {
+  Tv,
+  Search,
+  List,
+  RotateCcw,
+  CalendarDays,
+  DollarSign,
+  TrendingDown,
+  ArrowRight,
+  Check,
+  Users,
+  Zap,
+  ChevronRight,
+  Loader2,
+} from "lucide-react";
 
-type Tab = "trending" | "new" | "top";
+const FEATURES = [
+  {
+    icon: Search,
+    title: "Esplora e Cerca",
+    description:
+      "Sfoglia le serie trending, nuove e top rated. Cerca qualsiasi serie e scopri subito su quali piattaforme e disponibile in Italia.",
+    color: "#6366f1",
+  },
+  {
+    icon: List,
+    title: "Watchlist Personale",
+    description:
+      "Aggiungi le serie che vuoi vedere. Organizzale per priorita e stato: da vedere, in corso, completate.",
+    color: "#22c55e",
+  },
+  {
+    icon: RotateCcw,
+    title: "Rotation Planner",
+    description:
+      "L'algoritmo analizza la tua watchlist e crea il piano ottimale: quale piattaforma attivare ogni mese per vedere tutto spendendo il minimo.",
+    color: "#f59e0b",
+  },
+  {
+    icon: CalendarDays,
+    title: "Calendario Uscite",
+    description:
+      "Non perderti nessun episodio. Il calendario mostra tutte le uscite delle serie nella tua watchlist, mese per mese.",
+    color: "#818cf8",
+  },
+  {
+    icon: DollarSign,
+    title: "Analisi Costi",
+    description:
+      "Confronta quanto spenderesti con tutti gli abbonamenti attivi vs la rotazione intelligente. Proiezione annuale del risparmio.",
+    color: "#ef4444",
+  },
+  {
+    icon: Users,
+    title: "Multi-Utente",
+    description:
+      "Ogni utente ha la propria watchlist, impostazioni e piano di rotazione. Condividi l'app con chi vuoi.",
+    color: "#00E054",
+  },
+];
 
-export default function EsploraPage() {
-  const [tab, setTab] = useState<Tab>("trending");
-  const [platform, setPlatform] = useState<number | null>(null);
-  const [seriesList, setSeriesList] = useState<TMDBSeries[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [watchlistIds, setWatchlistIds] = useState<Set<number>>(new Set());
+const PLATFORMS = [
+  { name: "Netflix", color: "#E50914", icon: "N" },
+  { name: "Prime Video", color: "#00A8E1", icon: "P" },
+  { name: "Disney+", color: "#0063E5", icon: "D" },
+  { name: "Apple TV+", color: "#555", icon: "A" },
+  { name: "Paramount+", color: "#0064FF", icon: "P" },
+  { name: "NOW", color: "#00E054", icon: "N" },
+  { name: "Crunchyroll", color: "#F47521", icon: "C" },
+  { name: "Discovery+", color: "#003BE5", icon: "D" },
+];
 
-  // Fetch watchlist IDs
+const STEPS = [
+  {
+    step: "01",
+    title: "Cerca le serie che ami",
+    description: "Usa i dati di TMDB per trovare qualsiasi serie TV e scoprire dove guardarla in Italia.",
+  },
+  {
+    step: "02",
+    title: "Costruisci la tua watchlist",
+    description: "Aggiungi le serie, imposta le priorita. Segna quelle che stai guardando e quelle da iniziare.",
+  },
+  {
+    step: "03",
+    title: "Indica i tuoi abbonamenti",
+    description: "Di' a StreamPlanner quali piattaforme hai gia attive. Il planner ottimizza solo le rimanenti.",
+  },
+  {
+    step: "04",
+    title: "Ottieni il piano di rotazione",
+    description: "L'algoritmo crea il piano mensile ottimale: attiva una piattaforma al mese, guarda tutto, risparmia.",
+  },
+];
+
+export default function HomePage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
+  // Redirect authenticated users to the app
   useEffect(() => {
-    fetch("/api/watchlist")
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data)) {
-          setWatchlistIds(new Set(data.map((d: { series: { tmdbId: number } }) => d.series.tmdbId)));
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  // Fetch series
-  const fetchSeries = useCallback(async () => {
-    setLoading(true);
-    try {
-      let url: string;
-      if (platform) {
-        const sortBy =
-          tab === "trending"
-            ? "popularity.desc"
-            : tab === "new"
-            ? "first_air_date.desc"
-            : "vote_average.desc";
-        const params = new URLSearchParams({
-          provider: String(platform),
-          page: String(page),
-          sort: sortBy,
-        });
-        if (tab === "top") params.set("minVote", "7");
-        if (tab === "new") {
-          const d = new Date();
-          d.setMonth(d.getMonth() - 3);
-          params.set("from", d.toISOString().split("T")[0]);
-        }
-        url = `/api/tmdb/discover?${params}`;
-      } else {
-        url = `/api/tmdb/trending?page=${page}&window=${
-          tab === "trending" ? "week" : "day"
-        }`;
-      }
-
-      const res = await fetch(url);
-      const data = await res.json();
-      setSeriesList(data.results || []);
-      setTotalPages(data.total_pages || 1);
-    } catch {
-      setSeriesList([]);
-    } finally {
-      setLoading(false);
+    if (status === "authenticated") {
+      router.replace("/esplora");
     }
-  }, [tab, platform, page]);
+  }, [status, router]);
 
-  useEffect(() => {
-    setPage(1);
-  }, [tab, platform]);
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 size={32} className="animate-spin text-accent" />
+      </div>
+    );
+  }
 
-  useEffect(() => {
-    fetchSeries();
-  }, [fetchSeries]);
-
-  const toggleWatchlist = async (tmdbId: number) => {
-    if (watchlistIds.has(tmdbId)) {
-      await fetch("/api/watchlist", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tmdbId }),
-      });
-      setWatchlistIds((prev) => {
-        const next = new Set(prev);
-        next.delete(tmdbId);
-        return next;
-      });
-    } else {
-      await fetch("/api/watchlist", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tmdbId }),
-      });
-      setWatchlistIds((prev) => new Set(prev).add(tmdbId));
-    }
-  };
-
-  const TABS = [
-    { key: "trending" as Tab, label: "Trending", icon: TrendingUp },
-    { key: "new" as Tab, label: "Novita", icon: Sparkles },
-    { key: "top" as Tab, label: "Top Rated", icon: Clock },
-  ];
+  if (status === "authenticated") {
+    return null;
+  }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-text-primary">Esplora</h1>
-        <p className="text-text-secondary mt-1">
-          Scopri le migliori serie TV disponibili sulle piattaforme streaming
-        </p>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-2">
-        {TABS.map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              tab === key
-                ? "bg-accent text-white"
-                : "bg-bg-card text-text-secondary hover:text-text-primary"
-            }`}
-          >
-            <Icon size={16} />
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* Platform filter */}
-      <PlatformFilter selected={platform} onChange={setPlatform} />
-
-      {/* Grid */}
-      <SeriesGrid
-        series={seriesList}
-        watchlistIds={watchlistIds}
-        onToggleWatchlist={toggleWatchlist}
-        loading={loading}
-      />
-
-      {/* Pagination */}
-      {!loading && totalPages > 1 && (
-        <div className="flex items-center justify-center gap-4 pt-4">
-          <button
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page <= 1}
-            className="px-4 py-2 rounded-lg bg-bg-card border border-border text-sm disabled:opacity-40 hover:bg-bg-card-hover transition-colors"
-          >
-            Precedente
-          </button>
-          <span className="text-sm text-text-secondary">
-            Pagina {page} di {Math.min(totalPages, 500)}
-          </span>
-          <button
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page >= totalPages}
-            className="px-4 py-2 rounded-lg bg-bg-card border border-border text-sm disabled:opacity-40 hover:bg-bg-card-hover transition-colors"
-          >
-            Successiva
-          </button>
+    <div className="relative overflow-hidden">
+      {/* ─── HERO ─── */}
+      <section className="relative min-h-[90vh] flex flex-col items-center justify-center px-4 py-20">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-40 -left-40 w-96 h-96 bg-accent/10 rounded-full blur-[120px]" />
+          <div className="absolute top-20 right-0 w-80 h-80 bg-purple-600/8 rounded-full blur-[100px]" />
+          <div className="absolute bottom-0 left-1/3 w-72 h-72 bg-success/5 rounded-full blur-[100px]" />
         </div>
-      )}
+
+        <div className="relative z-10 max-w-4xl mx-auto text-center space-y-8">
+          <div className="inline-flex items-center gap-3 px-4 py-2 rounded-full bg-bg-card/80 border border-border backdrop-blur-sm">
+            <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center">
+              <Tv size={16} className="text-white" />
+            </div>
+            <span className="text-sm font-medium text-text-secondary">StreamPlanner</span>
+          </div>
+
+          <h1 className="text-4xl sm:text-5xl md:text-7xl font-bold tracking-tight">
+            <span className="text-text-primary">Smetti di pagare</span>
+            <br />
+            <span className="bg-gradient-to-r from-accent via-accent-light to-purple-400 bg-clip-text text-transparent">
+              abbonamenti che non usi
+            </span>
+          </h1>
+
+          <p className="text-lg sm:text-xl text-text-secondary max-w-2xl mx-auto leading-relaxed">
+            StreamPlanner analizza le serie che vuoi guardare e crea il piano perfetto:
+            quale piattaforma attivare ogni mese per vedere tutto,{" "}
+            <span className="text-success font-semibold">risparmiando fino al 60%</span>.
+          </p>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+            <Link
+              href="/registrati"
+              className="group flex items-center gap-2 px-8 py-4 rounded-2xl bg-accent text-white font-semibold text-lg hover:bg-accent-light transition-all hover:shadow-lg hover:shadow-accent/25"
+            >
+              Inizia Gratis
+              <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+            </Link>
+            <Link
+              href="/login"
+              className="flex items-center gap-2 px-8 py-4 rounded-2xl bg-bg-card border border-border text-text-primary font-medium text-lg hover:border-accent/50 transition-colors"
+            >
+              Accedi
+            </Link>
+          </div>
+
+          <p className="text-sm text-text-secondary/60 pt-2">
+            Gratuito. Nessuna carta richiesta. Dati da TMDB e JustWatch.
+          </p>
+        </div>
+
+        <div className="relative z-10 mt-16 w-full max-w-3xl mx-auto">
+          <p className="text-center text-xs text-text-secondary/50 mb-4 uppercase tracking-wider">
+            12 piattaforme monitorate
+          </p>
+          <div className="flex justify-center gap-3 flex-wrap">
+            {PLATFORMS.map((p) => (
+              <div
+                key={p.name}
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-bg-card/80 border border-border backdrop-blur-sm"
+              >
+                <div
+                  className="w-6 h-6 rounded-md flex items-center justify-center text-white text-xs font-bold"
+                  style={{ backgroundColor: p.color }}
+                >
+                  {p.icon}
+                </div>
+                <span className="text-sm text-text-secondary">{p.name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ─── HOW IT WORKS ─── */}
+      <section className="relative px-4 py-24">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-16">
+            <span className="text-accent text-sm font-semibold uppercase tracking-wider">Come funziona</span>
+            <h2 className="text-3xl sm:text-4xl font-bold text-text-primary mt-3">
+              4 passi verso il risparmio
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {STEPS.map((s, i) => (
+              <div
+                key={s.step}
+                className="group relative p-8 rounded-2xl bg-bg-card border border-border hover:border-accent/30 transition-all"
+              >
+                <div className="flex items-start gap-5">
+                  <span className="text-5xl font-black text-accent/15 group-hover:text-accent/30 transition-colors leading-none">
+                    {s.step}
+                  </span>
+                  <div>
+                    <h3 className="text-lg font-semibold text-text-primary mb-2">{s.title}</h3>
+                    <p className="text-sm text-text-secondary leading-relaxed">{s.description}</p>
+                  </div>
+                </div>
+                {i < STEPS.length - 1 && (
+                  <ChevronRight
+                    size={16}
+                    className="absolute -right-3 top-1/2 -translate-y-1/2 text-border hidden md:block"
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ─── SAVINGS SHOWCASE ─── */}
+      <section className="relative px-4 py-24">
+        <div className="max-w-4xl mx-auto">
+          <div className="p-8 sm:p-12 rounded-3xl bg-gradient-to-br from-bg-card to-bg-secondary border border-border relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-success/5 rounded-full blur-[80px]" />
+            <div className="absolute bottom-0 left-0 w-48 h-48 bg-accent/5 rounded-full blur-[60px]" />
+
+            <div className="relative z-10">
+              <div className="text-center mb-10">
+                <TrendingDown size={32} className="text-success mx-auto mb-3" />
+                <h2 className="text-3xl sm:text-4xl font-bold text-text-primary">
+                  Il confronto parla chiaro
+                </h2>
+                <p className="text-text-secondary mt-2">Esempio con 8 serie su 5 piattaforme diverse</p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                <div className="p-6 rounded-2xl bg-danger/5 border border-danger/20 text-center">
+                  <p className="text-sm text-danger mb-2">Tutto attivo</p>
+                  <p className="text-4xl font-black text-danger">&euro;47.94</p>
+                  <p className="text-xs text-text-secondary mt-1">/mese &middot; &euro;575 /anno</p>
+                </div>
+                <div className="p-6 rounded-2xl bg-success/5 border border-success/20 text-center relative">
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-success text-white text-xs font-bold">
+                    CON STREAMPLANNER
+                  </div>
+                  <p className="text-sm text-success mb-2 mt-1">Con rotazione</p>
+                  <p className="text-4xl font-black text-success">&euro;15.98</p>
+                  <p className="text-xs text-text-secondary mt-1">/mese &middot; &euro;192 /anno</p>
+                </div>
+                <div className="p-6 rounded-2xl bg-accent/5 border border-accent/20 text-center">
+                  <p className="text-sm text-accent-light mb-2">Risparmi</p>
+                  <p className="text-4xl font-black text-accent-light">&euro;383</p>
+                  <p className="text-xs text-text-secondary mt-1">/anno &middot; 66% in meno</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── FEATURES GRID ─── */}
+      <section className="relative px-4 py-24">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-16">
+            <span className="text-accent text-sm font-semibold uppercase tracking-wider">Funzionalita</span>
+            <h2 className="text-3xl sm:text-4xl font-bold text-text-primary mt-3">
+              Tutto quello che ti serve
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {FEATURES.map((f) => {
+              const Icon = f.icon;
+              return (
+                <div
+                  key={f.title}
+                  className="group p-6 rounded-2xl bg-bg-card border border-border hover:border-accent/20 transition-all hover:-translate-y-1"
+                >
+                  <div
+                    className="w-12 h-12 rounded-xl flex items-center justify-center mb-4 transition-transform group-hover:scale-110"
+                    style={{ backgroundColor: f.color + "15" }}
+                  >
+                    <Icon size={22} style={{ color: f.color }} />
+                  </div>
+                  <h3 className="text-lg font-semibold text-text-primary mb-2">{f.title}</h3>
+                  <p className="text-sm text-text-secondary leading-relaxed">{f.description}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* ─── WHAT'S INCLUDED ─── */}
+      <section className="relative px-4 py-24">
+        <div className="max-w-3xl mx-auto">
+          <div className="p-8 sm:p-10 rounded-3xl bg-bg-card border border-border">
+            <h2 className="text-2xl font-bold text-text-primary mb-8 text-center">
+              Cosa include StreamPlanner
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {[
+                "12 piattaforme streaming italiane",
+                "Dati aggiornati da TMDB",
+                "Disponibilita da JustWatch",
+                "Algoritmo di rotazione ottimale",
+                "Calendario uscite episodi",
+                "Analisi costi e proiezioni",
+                "Watchlist con priorita e stati",
+                "Impostazioni budget personalizzate",
+                "Segna abbonamenti attivi",
+                "Multi-utente con account separati",
+                "Responsive mobile-friendly",
+                "Dark theme di serie",
+              ].map((item) => (
+                <div key={item} className="flex items-center gap-3">
+                  <div className="w-5 h-5 rounded-full bg-success/10 flex items-center justify-center flex-shrink-0">
+                    <Check size={12} className="text-success" />
+                  </div>
+                  <span className="text-sm text-text-secondary">{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── FINAL CTA ─── */}
+      <section className="relative px-4 py-24">
+        <div className="max-w-3xl mx-auto text-center space-y-8">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-success/10 border border-success/20">
+            <Zap size={14} className="text-success" />
+            <span className="text-sm text-success font-medium">100% gratuito</span>
+          </div>
+
+          <h2 className="text-3xl sm:text-4xl font-bold text-text-primary">
+            Pronto a risparmiare sui tuoi abbonamenti?
+          </h2>
+          <p className="text-lg text-text-secondary max-w-xl mx-auto">
+            Crea il tuo account in 10 secondi, aggiungi le serie che vuoi guardare
+            e lascia che StreamPlanner faccia il resto.
+          </p>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Link
+              href="/registrati"
+              className="group inline-flex items-center gap-2 px-10 py-4 rounded-2xl bg-accent text-white font-semibold text-lg hover:bg-accent-light transition-all hover:shadow-lg hover:shadow-accent/25"
+            >
+              Crea Account Gratis
+              <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+            </Link>
+            <Link
+              href="/login"
+              className="inline-flex items-center gap-2 px-8 py-4 rounded-2xl text-text-secondary hover:text-text-primary transition-colors"
+            >
+              Ho gia un account
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── FOOTER ─── */}
+      <footer className="border-t border-border px-4 py-8">
+        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-md bg-accent flex items-center justify-center">
+              <Tv size={12} className="text-white" />
+            </div>
+            <span className="text-sm font-medium text-text-secondary">StreamPlanner</span>
+          </div>
+          <div className="flex gap-6 text-xs text-text-secondary/50">
+            <span>Dati da TMDB</span>
+            <span>Streaming: JustWatch</span>
+            <span>Made in Italy</span>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
