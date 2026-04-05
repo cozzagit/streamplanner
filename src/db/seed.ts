@@ -40,7 +40,7 @@ const PLATFORMS_DATA = [
     monthlyPriceStandard: 9.99,
     monthlyPricePremium: null,
     isFree: false,
-    color: "#000000",
+    color: "#a3a3a3",
   },
   {
     tmdbProviderId: 531,

@@ -45,7 +45,7 @@ export const TRACKED_PLATFORMS: PlatformConfig[] = [
     tmdbId: 350,
     name: "Apple TV+",
     slug: "apple-tv-plus",
-    color: "#000000",
+    color: "#a3a3a3",
     monthlyPrice: 9.99,
     isFree: false,
     icon: "🍎",
