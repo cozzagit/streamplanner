@@ -4,8 +4,10 @@ import { watchlist, series, settings } from "@/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { getSessionUser, unauthorized } from "@/lib/get-user";
 
+export const dynamic = "force-dynamic";
+
 const DEFAULT_EPISODE_RUNTIME = 45; // minutes
-const SCHEDULE_DAYS = 60; // generate 2 months ahead
+const SCHEDULE_DAYS = 90; // generate 3 months ahead
 
 const DAY_KEYS = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"] as const;
 
@@ -13,9 +15,9 @@ interface ScheduleEntry {
   seriesName: string;
   seriesTmdbId: number;
   posterPath: string | null;
-  episodes: number; // how many episodes this block
-  episodeFrom: number; // starting episode number (overall)
-  episodeTo: number; // ending episode number (overall)
+  episodes: number;
+  episodeFrom: number;
+  episodeTo: number;
   minutes: number;
   priority: string;
   status: string;
@@ -60,7 +62,19 @@ export async function GET() {
       );
 
     if (items.length === 0) {
-      return NextResponse.json({ schedule: {}, stats: { totalEpisodes: 0, totalHours: 0, daysNeeded: 0 } });
+      return NextResponse.json({
+        schedule: {},
+        stats: {
+          totalEpisodes: 0,
+          totalHours: 0,
+          scheduledEpisodes: 0,
+          scheduledHours: 0,
+          daysNeeded: 0,
+          seriesCount: 0,
+          weeklyHours: Object.values(weeklySchedule).reduce((a, b) => a + b, 0),
+          allScheduled: true,
+        },
+      });
     }
 
     // Build series queue sorted by priority and status
@@ -106,6 +120,13 @@ export async function GET() {
         return pa - pb;
       });
 
+    // Calculate total remaining (independent of schedule)
+    const totalRemainingEpisodes = queue.reduce((s, q) => s + q.remainingEpisodes, 0);
+    const totalRemainingMinutes = queue.reduce((s, q) => s + q.remainingEpisodes * q.runtime, 0);
+
+    // Calculate weekly available hours
+    const weeklyHours = Object.values(weeklySchedule).reduce((a, b) => a + b, 0);
+
     // Generate schedule
     const schedule: Record<string, ScheduleEntry[]> = {};
     const today = new Date();
@@ -116,6 +137,10 @@ export async function GET() {
     let daysUsed = 0;
 
     for (let d = 0; d < SCHEDULE_DAYS; d++) {
+      // Check if all series are fully scheduled
+      const allDone = queue.every((s) => s.scheduledEpisodes >= s.remainingEpisodes);
+      if (allDone) break;
+
       const date = new Date(today);
       date.setDate(date.getDate() + d);
       const dayOfWeek = date.getDay(); // 0=dom, 1=lun, ...
@@ -130,12 +155,13 @@ export async function GET() {
 
       // Fill this day with episodes from the queue
       for (const item of queue) {
-        if (availableMinutes <= 0) break;
+        if (availableMinutes < item.runtime * 0.5) break; // need at least half an episode's time
         const remaining = item.remainingEpisodes - item.scheduledEpisodes;
         if (remaining <= 0) continue;
 
         // How many episodes fit in remaining time?
-        const maxEpisodes = Math.max(1, Math.floor(availableMinutes / item.runtime));
+        const maxEpisodes = Math.floor(availableMinutes / item.runtime);
+        if (maxEpisodes <= 0) continue; // not enough time for even 1 episode of this series
         const episodesToSchedule = Math.min(maxEpisodes, remaining);
         const episodeFrom = item.scheduledEpisodes + 1;
         const episodeTo = item.scheduledEpisodes + episodesToSchedule;
@@ -163,19 +189,21 @@ export async function GET() {
         schedule[dateStr] = dayEntries;
         daysUsed++;
       }
-
-      // Check if all series are fully scheduled
-      const allDone = queue.every((s) => s.scheduledEpisodes >= s.remainingEpisodes);
-      if (allDone) break;
     }
+
+    const allScheduled = queue.every((s) => s.scheduledEpisodes >= s.remainingEpisodes);
 
     return NextResponse.json({
       schedule,
       stats: {
-        totalEpisodes: totalScheduledEpisodes,
-        totalHours: Math.round(totalScheduledMinutes / 60 * 10) / 10,
+        totalEpisodes: totalRemainingEpisodes,
+        totalHours: Math.round(totalRemainingMinutes / 60 * 10) / 10,
+        scheduledEpisodes: totalScheduledEpisodes,
+        scheduledHours: Math.round(totalScheduledMinutes / 60 * 10) / 10,
         daysNeeded: daysUsed,
-        seriesCount: queue.filter((s) => s.scheduledEpisodes > 0).length,
+        seriesCount: queue.length,
+        weeklyHours,
+        allScheduled,
       },
     });
   } catch (error) {

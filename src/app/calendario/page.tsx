@@ -56,8 +56,12 @@ interface ScheduleData {
   stats: {
     totalEpisodes: number;
     totalHours: number;
+    scheduledEpisodes: number;
+    scheduledHours: number;
     daysNeeded: number;
     seriesCount: number;
+    weeklyHours: number;
+    allScheduled: boolean;
   };
 }
 
@@ -204,17 +208,35 @@ function ScheduleView() {
         </div>
         <div className="p-3 rounded-xl bg-bg-card border border-border text-center">
           <p className="text-2xl font-bold text-accent-light">{stats.totalEpisodes}</p>
-          <p className="text-[11px] text-text-secondary">Episodi totali</p>
+          <p className="text-[11px] text-text-secondary">Episodi da vedere</p>
         </div>
         <div className="p-3 rounded-xl bg-bg-card border border-border text-center">
           <p className="text-2xl font-bold text-accent-light">{stats.totalHours}h</p>
-          <p className="text-[11px] text-text-secondary">Ore di visione</p>
+          <p className="text-[11px] text-text-secondary">Ore totali</p>
         </div>
         <div className="p-3 rounded-xl bg-bg-card border border-border text-center">
-          <p className="text-2xl font-bold text-accent-light">{stats.daysNeeded}</p>
-          <p className="text-[11px] text-text-secondary">Giorni necessari</p>
+          <p className="text-2xl font-bold text-accent-light">{stats.daysNeeded}gg</p>
+          <p className="text-[11px] text-text-secondary">
+            Giorni necessari
+          </p>
+          <p className="text-[10px] text-text-secondary/60">{stats.weeklyHours}h/settimana</p>
         </div>
       </div>
+
+      {/* Warning if not all episodes fit */}
+      {!stats.allScheduled && (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-warning/10 border border-warning/30 text-xs text-warning">
+          <Clock size={14} className="flex-shrink-0" />
+          <span>
+            Programmati {stats.scheduledEpisodes}/{stats.totalEpisodes} episodi in 90 giorni.
+            Aumenta le ore settimanali nelle{" "}
+            <Link href="/impostazioni" className="underline font-medium">
+              impostazioni
+            </Link>{" "}
+            per completare tutto.
+          </span>
+        </div>
+      )}
 
       {/* Week navigator */}
       <div className="flex items-center justify-between bg-bg-card rounded-xl border border-border p-4">
