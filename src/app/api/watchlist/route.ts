@@ -65,6 +65,9 @@ export async function POST(req: NextRequest) {
 
     const detail = await getSeriesDetail(tmdbId);
     const italyProviders = getItalyProviders(detail);
+    const avgRunTime = detail.episode_run_time?.length
+      ? Math.round(detail.episode_run_time.reduce((a, b) => a + b, 0) / detail.episode_run_time.length)
+      : null;
 
     // Upsert serie
     const [seriesRecord] = await db
@@ -84,6 +87,7 @@ export async function POST(req: NextRequest) {
         popularity: detail.popularity,
         numberOfSeasons: detail.number_of_seasons,
         numberOfEpisodes: detail.number_of_episodes,
+        episodeRunTime: avgRunTime,
         genres: JSON.stringify(detail.genres?.map((g) => g.name) || []),
         networks: JSON.stringify(detail.networks?.map((n) => n.name) || []),
         lastSyncedAt: new Date(),
@@ -99,6 +103,7 @@ export async function POST(req: NextRequest) {
           voteAverage: detail.vote_average,
           numberOfSeasons: detail.number_of_seasons,
           numberOfEpisodes: detail.number_of_episodes,
+          episodeRunTime: avgRunTime,
           lastSyncedAt: new Date(),
           updatedAt: new Date(),
         },

@@ -39,6 +39,7 @@ export interface TMDBSeriesDetail {
   popularity: number;
   number_of_seasons: number;
   number_of_episodes: number;
+  episode_run_time: number[];
   genres: { id: number; name: string }[];
   networks: { id: number; name: string; logo_path: string }[];
   seasons: TMDBSeason[];

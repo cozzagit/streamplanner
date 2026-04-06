@@ -1,14 +1,29 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Settings, Save, Loader2, Check, Ban, CreditCard } from "lucide-react";
+import { Settings, Save, Loader2, Check, Ban, CreditCard, Clock, Plus, Minus } from "lucide-react";
 import { TRACKED_PLATFORMS, DEFAULT_ACTIVE_SUBSCRIPTIONS } from "@/lib/platforms";
+
+const DAY_LABELS = [
+  { key: "lun", label: "Lun" },
+  { key: "mar", label: "Mar" },
+  { key: "mer", label: "Mer" },
+  { key: "gio", label: "Gio" },
+  { key: "ven", label: "Ven" },
+  { key: "sab", label: "Sab" },
+  { key: "dom", label: "Dom" },
+];
+
+const DEFAULT_WEEKLY: Record<string, number> = {
+  lun: 2, mar: 2, mer: 2, gio: 2, ven: 2, sab: 3, dom: 3,
+};
 
 export default function ImpostazioniPage() {
   const [budget, setBudget] = useState(15);
   const [alwaysOn, setAlwaysOn] = useState<string[]>([]);
   const [excluded, setExcluded] = useState<string[]>([]);
   const [activeSubs, setActiveSubs] = useState<string[]>(DEFAULT_ACTIVE_SUBSCRIPTIONS);
+  const [weeklySchedule, setWeeklySchedule] = useState<Record<string, number>>({ ...DEFAULT_WEEKLY });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -27,6 +42,9 @@ export default function ImpostazioniPage() {
         if (data.active_subscriptions) {
           try { setActiveSubs(JSON.parse(data.active_subscriptions)); } catch { /* ignore */ }
         }
+        if (data.weekly_schedule) {
+          try { setWeeklySchedule(JSON.parse(data.weekly_schedule)); } catch { /* ignore */ }
+        }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -43,6 +61,7 @@ export default function ImpostazioniPage() {
           always_on_platforms: JSON.stringify(alwaysOn),
           excluded_platforms: JSON.stringify(excluded),
           active_subscriptions: JSON.stringify(activeSubs),
+          weekly_schedule: JSON.stringify(weeklySchedule),
         }),
       });
       setSaved(true);
@@ -169,6 +188,70 @@ export default function ImpostazioniPage() {
             &middot; Disponibile per rotazione: &euro;{remainingBudget.toFixed(2)}/mese
           </div>
         )}
+      </div>
+
+      {/* Weekly Schedule */}
+      <div className="p-6 rounded-xl bg-bg-card border border-border space-y-4">
+        <h2 className="font-semibold text-text-primary flex items-center gap-2">
+          <Clock size={16} />
+          Programmazione Settimanale
+        </h2>
+        <p className="text-sm text-text-secondary">
+          Quante ore dedichi alle serie TV ogni giorno? Il calendario
+          distribuira le puntate in base alla tua disponibilita.
+        </p>
+        <div className="space-y-2">
+          {DAY_LABELS.map(({ key, label }) => {
+            const hours = weeklySchedule[key] || 0;
+            const updateHours = (delta: number) => {
+              setWeeklySchedule((prev) => ({
+                ...prev,
+                [key]: Math.max(0, Math.min(12, (prev[key] || 0) + delta)),
+              }));
+            };
+            return (
+              <div
+                key={key}
+                className="flex items-center gap-3 p-2 rounded-lg hover:bg-bg-secondary/50 transition-colors"
+              >
+                <span className="w-10 text-sm font-medium text-text-primary">
+                  {label}
+                </span>
+                <div className="flex-1 h-2 bg-bg-secondary rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-accent rounded-full transition-all"
+                    style={{ width: `${(hours / 8) * 100}%` }}
+                  />
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => updateHours(-0.5)}
+                    disabled={hours <= 0}
+                    className="p-1 rounded-md bg-bg-secondary text-text-secondary hover:text-text-primary hover:bg-bg-secondary/80 transition-colors disabled:opacity-30"
+                  >
+                    <Minus size={14} />
+                  </button>
+                  <span className="w-12 text-center text-sm font-semibold text-accent-light tabular-nums">
+                    {hours}h
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => updateHours(0.5)}
+                    disabled={hours >= 12}
+                    className="p-1 rounded-md bg-bg-secondary text-text-secondary hover:text-text-primary hover:bg-bg-secondary/80 transition-colors disabled:opacity-30"
+                  >
+                    <Plus size={14} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="text-xs text-text-secondary bg-bg-secondary p-3 rounded-lg">
+          Totale settimanale: {Object.values(weeklySchedule).reduce((a, b) => a + b, 0)}h
+          &middot; ~{Math.round(Object.values(weeklySchedule).reduce((a, b) => a + b, 0) / 0.75)} episodi/settimana (da ~45 min)
+        </div>
       </div>
 
       {/* Always-on platforms (only non-active-subscription platforms) */}
