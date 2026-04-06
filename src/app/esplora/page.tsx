@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { PlatformFilter } from "@/components/platform-filter";
 import { SeriesGrid } from "@/components/series-grid";
-import { TrendingUp, Sparkles, Clock } from "lucide-react";
+import { TrendingUp, Sparkles, Star } from "lucide-react";
 import type { TMDBSeries } from "@/lib/tmdb";
 
 type Tab = "trending" | "new" | "top";
@@ -34,29 +34,33 @@ export default function EsploraPage() {
     setLoading(true);
     try {
       let url: string;
-      if (platform) {
-        const sortBy =
-          tab === "trending"
-            ? "popularity.desc"
-            : tab === "new"
-            ? "first_air_date.desc"
-            : "vote_average.desc";
-        const params = new URLSearchParams({
-          provider: String(platform),
-          page: String(page),
-          sort: sortBy,
-        });
-        if (tab === "top") params.set("minVote", "7");
-        if (tab === "new") {
+
+      if (tab === "trending" && !platform) {
+        // Trending without platform: use TMDB trending endpoint
+        url = `/api/tmdb/trending?page=${page}&window=week`;
+      } else {
+        // All other cases: use discover endpoint (works with or without provider)
+        const params = new URLSearchParams({ page: String(page) });
+
+        if (platform) {
+          params.set("provider", String(platform));
+        }
+
+        if (tab === "trending") {
+          params.set("sort", "popularity.desc");
+        } else if (tab === "new") {
+          params.set("sort", "first_air_date.desc");
           const d = new Date();
           d.setMonth(d.getMonth() - 3);
           params.set("from", d.toISOString().split("T")[0]);
+          params.set("minVoteCount", "5");
+        } else if (tab === "top") {
+          params.set("sort", "vote_average.desc");
+          params.set("minVote", "7");
+          params.set("minVoteCount", "200");
         }
+
         url = `/api/tmdb/discover?${params}`;
-      } else {
-        url = `/api/tmdb/trending?page=${page}&window=${
-          tab === "trending" ? "week" : "day"
-        }`;
       }
 
       const res = await fetch(url);
@@ -103,7 +107,7 @@ export default function EsploraPage() {
   const TABS = [
     { key: "trending" as Tab, label: "Trending", icon: TrendingUp },
     { key: "new" as Tab, label: "Novita", icon: Sparkles },
-    { key: "top" as Tab, label: "Top Rated", icon: Clock },
+    { key: "top" as Tab, label: "Top Rated", icon: Star },
   ];
 
   return (

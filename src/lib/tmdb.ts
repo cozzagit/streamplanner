@@ -125,25 +125,29 @@ export async function getTrending(
   return tmdbFetch(`/trending/tv/${timeWindow}`, { page: String(page) });
 }
 
-/** Discover TV series on a specific provider in Italy */
+/** Discover TV series, optionally filtered by provider */
 export async function discoverByProvider(
-  providerId: number,
+  providerId: number | null,
   options: {
     page?: number;
     sortBy?: string;
     minVote?: number;
+    minVoteCount?: number;
     dateFrom?: string;
     dateTo?: string;
   } = {}
 ): Promise<TMDBResponse<TMDBSeries>> {
   const params: Record<string, string> = {
-    with_watch_providers: String(providerId),
-    watch_region: WATCH_REGION,
-    with_watch_monetization_types: "flatrate|free|ads",
     sort_by: options.sortBy || "popularity.desc",
     page: String(options.page || 1),
   };
+  if (providerId) {
+    params.with_watch_providers = String(providerId);
+    params.watch_region = WATCH_REGION;
+    params.with_watch_monetization_types = "flatrate|free|ads";
+  }
   if (options.minVote) params["vote_average.gte"] = String(options.minVote);
+  if (options.minVoteCount) params["vote_count.gte"] = String(options.minVoteCount);
   if (options.dateFrom) params["first_air_date.gte"] = options.dateFrom;
   if (options.dateTo) params["first_air_date.lte"] = options.dateTo;
 
