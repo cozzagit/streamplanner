@@ -14,12 +14,16 @@ import {
   AlertTriangle,
   Lock,
   Shield,
+  Clock,
+  Timer,
+  AlertCircle,
 } from "lucide-react";
 
 interface CoveredSeries {
-  seriesId?: string;
   name: string;
   priority: string;
+  episodes?: number;
+  hours?: number;
 }
 
 interface PlatformEntry {
@@ -40,6 +44,10 @@ interface PlanMonth {
   alwaysOnPlatforms?: PlatformEntry[];
   freePlatforms: PlatformEntry[];
   estimatedCost: number;
+  totalHoursOnPlatform: number;
+  viewingHoursThisMonth: number;
+  monthsForPlatform: number;
+  currentMonthOfPlatform: number;
   seriesCovered: number;
   withinBudget?: boolean;
 }
@@ -50,22 +58,34 @@ interface ActiveSubEntry {
   color: string;
   monthlyPrice: number;
   seriesCovered: number;
+  totalHours: number;
   coveredSeries: CoveredSeries[];
+}
+
+interface UncoveredSeries {
+  name: string;
+  tmdbId: number;
 }
 
 interface RotationData {
   plans: PlanMonth[];
   activeSubscriptions?: ActiveSubEntry[];
+  uncoveredSeries?: UncoveredSeries[];
   summary: {
     monthlyBudget: number;
+    weeklyHours: number;
+    monthlyViewingHours: number;
     alwaysOnCost?: number;
     activeSubsCost?: number;
     totalPlatformsCost: number;
     rotationMonthlyCost: number;
     monthlySavings: number;
     watchlistTotal: number;
+    totalViewingHours: number;
     seriesCoveredByActiveSubs?: number;
+    seriesCoveredByFree?: number;
     platformsNeeded: number;
+    monthsInPlan: number;
     alwaysOnPlatforms?: string[];
     activeSubscriptions?: string[];
   };
@@ -101,7 +121,7 @@ export default function PlannerPage() {
           platformId: plan.mainPlatform.platformId,
           estimatedCost: plan.estimatedCost,
           seriesCount: plan.seriesCovered,
-          reason: `Rotazione: ${plan.mainPlatform.name} per ${plan.seriesCovered} serie`,
+          reason: `Rotazione: ${plan.mainPlatform.name} — ${plan.totalHoursOnPlatform}h in ${plan.monthsForPlatform} mesi`,
         }),
       });
       if (res.ok) {
@@ -158,7 +178,7 @@ export default function PlannerPage() {
             Rotation Planner
           </h1>
           <p className="text-text-secondary mt-1">
-            Piano ottimale per i prossimi {months} mesi basato sulla tua watchlist
+            Piano ottimale basato su {summary.weeklyHours}h/settimana di visione
           </p>
         </div>
         <select
@@ -177,19 +197,25 @@ export default function PlannerPage() {
         <div className="p-4 rounded-xl bg-bg-card border border-border">
           <div className="flex items-center gap-2 text-text-secondary text-xs mb-2">
             <Tv size={14} />
-            Serie in watchlist
+            Serie da vedere
           </div>
           <p className="text-2xl font-bold text-text-primary">
             {summary.watchlistTotal}
+          </p>
+          <p className="text-xs text-text-secondary mt-1">
+            {summary.totalViewingHours}h totali
           </p>
         </div>
         <div className="p-4 rounded-xl bg-bg-card border border-border">
           <div className="flex items-center gap-2 text-text-secondary text-xs mb-2">
             <Calendar size={14} />
-            Piattaforme necessarie
+            Durata piano
           </div>
           <p className="text-2xl font-bold text-text-primary">
-            {summary.platformsNeeded}
+            {summary.monthsInPlan} {summary.monthsInPlan === 1 ? "mese" : "mesi"}
+          </p>
+          <p className="text-xs text-text-secondary mt-1">
+            {summary.platformsNeeded} piattaforme in rotazione
           </p>
         </div>
         <div className="p-4 rounded-xl bg-bg-card border border-border">
@@ -224,6 +250,17 @@ export default function PlannerPage() {
         </div>
       </div>
 
+      {/* Viewing capacity info */}
+      <div className="flex items-center gap-3 p-4 rounded-xl bg-bg-card border border-border">
+        <Timer size={16} className="text-accent flex-shrink-0" />
+        <div className="text-sm text-text-secondary">
+          <span className="font-medium text-text-primary">{summary.weeklyHours}h/settimana</span>
+          {" "}= ~{summary.monthlyViewingHours}h/mese di visione.
+          {" "}Il piano distribuisce le piattaforme in base al tempo necessario.
+          {" "}<a href="/impostazioni" className="text-accent hover:underline">Modifica ore</a>
+        </div>
+      </div>
+
       {/* Active subscriptions coverage */}
       {data.activeSubscriptions && data.activeSubscriptions.length > 0 && (
         <div className="p-4 rounded-xl bg-success/5 border border-success/20 space-y-3">
@@ -233,30 +270,38 @@ export default function PlannerPage() {
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {data.activeSubscriptions.map((sub) => (
-              <div key={sub.slug} className="flex items-center gap-3 p-3 rounded-lg bg-bg-card border border-border">
-                <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold"
-                  style={{ backgroundColor: sub.color }}
-                >
-                  {sub.seriesCovered}
+              <div key={sub.slug} className="p-3 rounded-lg bg-bg-card border border-border">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold"
+                    style={{ backgroundColor: sub.color }}
+                  >
+                    {sub.seriesCovered}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-text-primary">{sub.name}</p>
+                    <p className="text-xs text-text-secondary flex items-center gap-1">
+                      <Clock size={10} />
+                      {sub.totalHours}h di contenuto
+                    </p>
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/10 text-success font-medium">
+                    Attivo
+                  </span>
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-text-primary">{sub.name}</p>
-                  <p className="text-xs text-text-secondary">
-                    {sub.coveredSeries.map((s) => s.name).join(", ")}
-                  </p>
-                </div>
-                <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-success/10 text-success font-medium">
-                  Attivo
-                </span>
+                {sub.coveredSeries.length > 0 && (
+                  <div className="mt-2 space-y-0.5">
+                    {sub.coveredSeries.map((s) => (
+                      <p key={s.name} className="text-xs text-text-secondary pl-11">
+                        {s.name}
+                        {s.hours != null && <span className="text-text-secondary/50"> ({s.hours}h)</span>}
+                      </p>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>
-          {summary.seriesCoveredByActiveSubs != null && summary.seriesCoveredByActiveSubs > 0 && (
-            <p className="text-xs text-text-secondary">
-              {summary.seriesCoveredByActiveSubs} serie gia coperte — il planner ottimizza le rimanenti
-            </p>
-          )}
         </div>
       )}
 
@@ -278,158 +323,203 @@ export default function PlannerPage() {
         </div>
       )}
 
+      {/* Uncovered series warning */}
+      {data.uncoveredSeries && data.uncoveredSeries.length > 0 && (
+        <div className="flex items-start gap-3 p-4 rounded-xl bg-warning/10 border border-warning/30">
+          <AlertCircle size={16} className="text-warning flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-warning">
+              {data.uncoveredSeries.length} serie senza piattaforma disponibile
+            </p>
+            <p className="text-xs text-text-secondary mt-1">
+              {data.uncoveredSeries.map((s) => s.name).join(", ")}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Monthly timeline */}
-      <div className="space-y-4">
-        <h2 className="text-lg font-semibold text-text-primary">
-          Piano Mensile
-        </h2>
-        {plans.map((plan, i) => {
-          const planKey = `${plan.month}-${plan.year}`;
-          const isConfirmed = confirmed.has(planKey);
-          const isConfirming = confirming === planKey;
+      {plans.length > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold text-text-primary">
+            Piano Mensile
+          </h2>
+          {plans.map((plan, i) => {
+            const planKey = `${plan.month}-${plan.year}`;
+            const isConfirmed = confirmed.has(planKey);
+            const isConfirming = confirming === planKey;
+            const isFirstOfPlatform = plan.currentMonthOfPlatform === 1;
+            const isMultiMonth = plan.monthsForPlatform > 1;
 
-          return (
-            <div
-              key={planKey}
-              className="relative flex items-start gap-4"
-            >
-              {/* Timeline connector */}
-              {i < plans.length - 1 && (
-                <div className="absolute left-5 top-12 bottom-0 w-0.5 bg-border" />
-              )}
-
-              {/* Month indicator */}
+            return (
               <div
-                className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold"
-                style={{ backgroundColor: plan.mainPlatform.color }}
+                key={planKey}
+                className="relative flex items-start gap-4"
               >
-                {plan.month}
-              </div>
+                {/* Timeline connector */}
+                {i < plans.length - 1 && (
+                  <div className="absolute left-5 top-12 bottom-0 w-0.5 bg-border" />
+                )}
 
-              {/* Plan card */}
-              <div className={`flex-1 p-4 rounded-xl bg-bg-card border ${
-                plan.withinBudget === false
-                  ? "border-danger/50"
-                  : isConfirmed
-                  ? "border-success/50"
-                  : "border-border"
-              }`}>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-text-primary capitalize">
-                      {plan.label}
-                    </h3>
-                    {plan.withinBudget === false && (
-                      <span className="flex items-center gap-1 text-xs text-danger">
-                        <AlertTriangle size={12} />
-                        Supera budget
-                      </span>
-                    )}
-                  </div>
-                  <span
-                    className="px-3 py-1 rounded-full text-sm font-bold text-white"
-                    style={{ backgroundColor: plan.mainPlatform.color }}
-                  >
-                    {plan.estimatedCost === 0
-                      ? "GRATIS"
-                      : `\u20AC${plan.estimatedCost.toFixed(2)}/mese`}
-                  </span>
+                {/* Month indicator */}
+                <div
+                  className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold"
+                  style={{ backgroundColor: plan.mainPlatform.color }}
+                >
+                  {plan.month}
                 </div>
 
-                {/* Main platform */}
-                <div className="flex items-center gap-2 mb-3">
-                  <ArrowRight size={14} className="text-accent" />
-                  <span className="text-sm font-medium text-text-primary">
-                    Abbonati a{" "}
-                    <span style={{ color: plan.mainPlatform.color }}>
-                      {plan.mainPlatform.name}
-                    </span>
-                  </span>
-                </div>
-
-                {/* Series list */}
-                <div className="space-y-1">
-                  {plan.mainPlatform.coveredSeries.map((s) => (
-                    <div
-                      key={s.name}
-                      className="flex items-center gap-2 text-sm text-text-secondary"
-                    >
-                      <span className="w-1.5 h-1.5 rounded-full bg-accent flex-shrink-0" />
-                      {s.name}
-                      {s.priority === "high" && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-danger/20 text-danger">
-                          priorita alta
+                {/* Plan card */}
+                <div className={`flex-1 p-4 rounded-xl bg-bg-card border ${
+                  plan.withinBudget === false
+                    ? "border-danger/50"
+                    : isConfirmed
+                    ? "border-success/50"
+                    : "border-border"
+                }`}>
+                  <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-text-primary capitalize">
+                        {plan.label}
+                      </h3>
+                      {isMultiMonth && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-bg-secondary text-text-secondary font-medium">
+                          {plan.currentMonthOfPlatform}/{plan.monthsForPlatform}
+                        </span>
+                      )}
+                      {plan.withinBudget === false && (
+                        <span className="flex items-center gap-1 text-xs text-danger">
+                          <AlertTriangle size={12} />
+                          Supera budget
                         </span>
                       )}
                     </div>
-                  ))}
-                </div>
-
-                {/* Always-on platforms this month */}
-                {plan.alwaysOnPlatforms && plan.alwaysOnPlatforms.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-border">
-                    <p className="text-xs text-text-secondary mb-1 flex items-center gap-1">
-                      <Shield size={10} />
-                      Sempre attive:
-                    </p>
-                    {plan.alwaysOnPlatforms.map((aop) => (
-                      <div key={aop.platformId}>
-                        <span
-                          className="text-xs font-medium"
-                          style={{ color: aop.color }}
-                        >
-                          {aop.name}
-                        </span>
-                        {aop.coveredSeries.length > 0 && (
-                          <span className="text-xs text-text-secondary">
-                            {" "}({aop.coveredSeries.length} serie)
-                          </span>
-                        )}
-                      </div>
-                    ))}
+                    <span
+                      className="px-3 py-1 rounded-full text-sm font-bold text-white"
+                      style={{ backgroundColor: plan.mainPlatform.color }}
+                    >
+                      {plan.estimatedCost === 0
+                        ? "GRATIS"
+                        : `\u20AC${plan.estimatedCost.toFixed(2)}/mese`}
+                    </span>
                   </div>
-                )}
 
-                {/* Free platforms this month */}
-                {plan.freePlatforms.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-border">
-                    <p className="text-xs text-text-secondary mb-1">
-                      + Gratis questo mese:
-                    </p>
-                    {plan.freePlatforms.map((fp) => (
-                      <div key={fp.name} className="text-xs text-success">
-                        {fp.name} ({fp.coveredSeries.length} serie)
-                      </div>
-                    ))}
+                  {/* Main platform + viewing hours */}
+                  <div className="flex items-center gap-2 mb-2">
+                    <ArrowRight size={14} className="text-accent" />
+                    <span className="text-sm font-medium text-text-primary">
+                      {isFirstOfPlatform ? "Abbonati a" : "Continua con"}{" "}
+                      <span style={{ color: plan.mainPlatform.color }}>
+                        {plan.mainPlatform.name}
+                      </span>
+                    </span>
                   </div>
-                )}
 
-                {/* Confirm button */}
-                <div className="mt-4 pt-3 border-t border-border">
-                  <button
-                    onClick={() => confirmPlan(plan)}
-                    disabled={isConfirmed || isConfirming}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors ${
-                      isConfirmed
-                        ? "bg-success/10 text-success border border-success/30 cursor-default"
-                        : "bg-accent text-white hover:bg-accent-light"
-                    }`}
-                  >
-                    {isConfirming ? (
-                      <Loader2 size={14} className="animate-spin" />
-                    ) : isConfirmed ? (
-                      <CheckCircle size={14} />
-                    ) : (
-                      <CheckCircle size={14} />
+                  {/* Time estimate */}
+                  <div className="flex items-center gap-4 mb-3 text-xs text-text-secondary">
+                    <span className="flex items-center gap-1">
+                      <Clock size={12} />
+                      {plan.totalHoursOnPlatform}h totali
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Timer size={12} />
+                      ~{plan.viewingHoursThisMonth}h questo mese
+                    </span>
+                    {isMultiMonth && (
+                      <span className="flex items-center gap-1">
+                        <Calendar size={12} />
+                        {plan.monthsForPlatform} mesi necessari
+                      </span>
                     )}
-                    {isConfirmed ? "Confermato" : "Conferma Piano"}
-                  </button>
+                  </div>
+
+                  {/* Series list (only on first month of each platform) */}
+                  {isFirstOfPlatform && plan.mainPlatform.coveredSeries.length > 0 && (
+                    <div className="space-y-1">
+                      {plan.mainPlatform.coveredSeries.map((s) => (
+                        <div
+                          key={s.name}
+                          className="flex items-center gap-2 text-sm text-text-secondary"
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-accent flex-shrink-0" />
+                          <span className="flex-1">{s.name}</span>
+                          <span className="text-xs text-text-secondary/60 tabular-nums">
+                            {s.episodes}ep &middot; {s.hours}h
+                          </span>
+                          {s.priority === "high" && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-danger/20 text-danger">
+                              alta
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Always-on platforms */}
+                  {plan.alwaysOnPlatforms && plan.alwaysOnPlatforms.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-border">
+                      <p className="text-xs text-text-secondary mb-1 flex items-center gap-1">
+                        <Shield size={10} />
+                        Sempre attive:
+                      </p>
+                      {plan.alwaysOnPlatforms.map((aop) => (
+                        <div key={aop.platformId}>
+                          <span
+                            className="text-xs font-medium"
+                            style={{ color: aop.color }}
+                          >
+                            {aop.name}
+                          </span>
+                          {aop.coveredSeries.length > 0 && (
+                            <span className="text-xs text-text-secondary">
+                              {" "}({aop.coveredSeries.length} serie)
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Free platforms */}
+                  {plan.freePlatforms.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-border">
+                      <p className="text-xs text-text-secondary mb-1">
+                        + Gratis:
+                      </p>
+                      {plan.freePlatforms.map((fp) => (
+                        <div key={fp.name} className="text-xs text-success">
+                          {fp.name} ({fp.coveredSeries.length} serie)
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Confirm button */}
+                  <div className="mt-4 pt-3 border-t border-border">
+                    <button
+                      onClick={() => confirmPlan(plan)}
+                      disabled={isConfirmed || isConfirming}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors ${
+                        isConfirmed
+                          ? "bg-success/10 text-success border border-success/30 cursor-default"
+                          : "bg-accent text-white hover:bg-accent-light"
+                      }`}
+                    >
+                      {isConfirming ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <CheckCircle size={14} />
+                      )}
+                      {isConfirmed ? "Confermato" : "Conferma Piano"}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

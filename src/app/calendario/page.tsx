@@ -49,6 +49,8 @@ interface ScheduleEntry {
   minutes: number;
   priority: string;
   status: string;
+  platformName?: string;
+  platformColor?: string;
 }
 
 interface ScheduleData {
@@ -379,9 +381,22 @@ function ScheduleView() {
                               : `${entry.minutes}m`}
                           </p>
                         </div>
-                        <span className="text-xs font-medium text-accent-light tabular-nums flex-shrink-0">
-                          {entry.episodes} ep
-                        </span>
+                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                          <span className="text-xs font-medium text-accent-light tabular-nums">
+                            {entry.episodes} ep
+                          </span>
+                          {entry.platformName && (
+                            <span
+                              className="text-[9px] px-1.5 py-0.5 rounded font-medium"
+                              style={{
+                                backgroundColor: (entry.platformColor || "#666") + "20",
+                                color: entry.platformColor || "#666",
+                              }}
+                            >
+                              {entry.platformName}
+                            </span>
+                          )}
+                        </div>
                       </Link>
                     );
                   })}

@@ -11,7 +11,24 @@ import {
 import { eq, and, inArray } from "drizzle-orm";
 import { getSessionUser, unauthorized } from "@/lib/get-user";
 
-interface PlatformScore {
+export const dynamic = "force-dynamic";
+
+const DEFAULT_EPISODE_RUNTIME = 45; // minutes
+const DAY_KEYS = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"] as const;
+
+interface SeriesInfo {
+  seriesId: string;
+  tmdbId: number;
+  name: string;
+  priority: string;
+  status: string;
+  remainingEpisodes: number;
+  episodeRunTime: number;
+  totalHours: number;
+  platformIds: string[];
+}
+
+interface PlatformInfo {
   platformId: string;
   tmdbProviderId: number;
   name: string;
@@ -19,26 +36,17 @@ interface PlatformScore {
   color: string;
   monthlyPrice: number;
   isFree: boolean;
-  seriesAvailable: {
-    seriesId: string;
-    tmdbId: number;
-    name: string;
-    priority: string;
-    status: string;
-  }[];
-  score: number; // weighted score: series count * priority weight
-  costPerSeries: number;
 }
 
-// GET — calcola la rotation ottimale
+// GET — calcola la rotation ottimale basata su tempo di visione
 export async function GET(req: NextRequest) {
   const user = await getSessionUser();
   if (!user) return unauthorized();
 
-  const monthsAhead = Number(req.nextUrl.searchParams.get("months") || "3");
+  const monthsAhead = Number(req.nextUrl.searchParams.get("months") || "6");
 
   try {
-    // 1. Get all settings for this user
+    // 1. Load settings
     const allSettings = await db
       .select()
       .from(settings)
@@ -53,33 +61,24 @@ export async function GET(req: NextRequest) {
       : 15;
 
     let alwaysOnSlugs: string[] = [];
-    if (settingsMap.always_on_platforms) {
-      try {
-        alwaysOnSlugs = JSON.parse(settingsMap.always_on_platforms);
-      } catch {
-        // ignore invalid JSON
-      }
-    }
+    try { alwaysOnSlugs = JSON.parse(settingsMap.always_on_platforms || "[]"); } catch { /* */ }
 
     let excludedSlugs: string[] = [];
-    if (settingsMap.excluded_platforms) {
-      try {
-        excludedSlugs = JSON.parse(settingsMap.excluded_platforms);
-      } catch {
-        // ignore invalid JSON
-      }
-    }
+    try { excludedSlugs = JSON.parse(settingsMap.excluded_platforms || "[]"); } catch { /* */ }
 
     let activeSubSlugs: string[] = [];
-    if (settingsMap.active_subscriptions) {
-      try {
-        activeSubSlugs = JSON.parse(settingsMap.active_subscriptions);
-      } catch {
-        // ignore invalid JSON
-      }
-    }
+    try { activeSubSlugs = JSON.parse(settingsMap.active_subscriptions || "[]"); } catch { /* */ }
 
-    // 2. Get all watchlist items (to_watch and watching only) for this user
+    // Parse weekly schedule to calculate monthly viewing capacity
+    let weeklySchedule: Record<string, number> = {
+      lun: 2, mar: 2, mer: 2, gio: 2, ven: 2, sab: 3, dom: 3,
+    };
+    try { weeklySchedule = JSON.parse(settingsMap.weekly_schedule || "{}"); } catch { /* */ }
+
+    const weeklyHours = Object.values(weeklySchedule).reduce((a, b) => a + b, 0);
+    const monthlyViewingHours = weeklyHours * 4.33; // avg weeks per month
+
+    // 2. Load watchlist with series info
     const watchlistItems = await db
       .select()
       .from(watchlist)
@@ -99,285 +98,334 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // 3. For each watchlist series, get available platforms
-    const seriesWithPlatforms = await Promise.all(
-      watchlistItems.map(async (item) => {
-        const platformLinks = await db
-          .select({
-            platformId: platforms.id,
-            platformName: platforms.name,
-            platformSlug: platforms.slug,
-            platformColor: platforms.color,
-            tmdbProviderId: platforms.tmdbProviderId,
-            monthlyPrice: platforms.monthlyPrice,
-            isFree: platforms.isFree,
-            monetizationType: seriesPlatforms.monetizationType,
-          })
-          .from(seriesPlatforms)
-          .innerJoin(platforms, eq(seriesPlatforms.platformId, platforms.id))
-          .where(eq(seriesPlatforms.seriesId, item.series.id));
-
-        return {
-          ...item,
-          platforms: platformLinks,
-        };
-      })
-    );
-
-    // 4. Build platform → series mapping
-    const platformMap = new Map<string, PlatformScore>();
-
-    for (const item of seriesWithPlatforms) {
-      for (const pl of item.platforms) {
-        const key = pl.platformId;
-        if (!platformMap.has(key)) {
-          platformMap.set(key, {
-            platformId: pl.platformId,
-            tmdbProviderId: pl.tmdbProviderId,
-            name: pl.platformName,
-            slug: pl.platformSlug,
-            color: pl.platformColor || "#666",
-            monthlyPrice: pl.monthlyPrice || 0,
-            isFree: pl.isFree,
-            seriesAvailable: [],
-            score: 0,
-            costPerSeries: 0,
-          });
-        }
-
-        const entry = platformMap.get(key)!;
-        const priorityWeight =
-          item.watchlist.priority === "high"
-            ? 3
-            : item.watchlist.priority === "medium"
-            ? 2
-            : 1;
-        const statusWeight =
-          item.watchlist.status === "watching" ? 2 : 1;
-
-        entry.seriesAvailable.push({
-          seriesId: item.series.id,
-          tmdbId: item.series.tmdbId,
-          name: item.series.name,
-          priority: item.watchlist.priority,
-          status: item.watchlist.status!,
-        });
-        entry.score += priorityWeight * statusWeight;
-      }
+    // 3. Get all platforms
+    const allPlatforms = await db.select().from(platforms);
+    const platformById = new Map<string, PlatformInfo>();
+    const platformBySlug = new Map<string, PlatformInfo>();
+    for (const p of allPlatforms) {
+      const info: PlatformInfo = {
+        platformId: p.id,
+        tmdbProviderId: p.tmdbProviderId,
+        name: p.name,
+        slug: p.slug,
+        color: p.color || "#666",
+        monthlyPrice: p.monthlyPrice || 0,
+        isFree: p.isFree,
+      };
+      platformById.set(p.id, info);
+      platformBySlug.set(p.slug, info);
     }
 
-    // 5. Filter out excluded platforms and calculate cost-effectiveness
-    const scoredPlatforms = Array.from(platformMap.values())
-      .filter((p) => !excludedSlugs.includes(p.slug))
-      .map((p) => ({
-        ...p,
-        isActiveSub: activeSubSlugs.includes(p.slug),
-        costPerSeries: p.isFree || activeSubSlugs.includes(p.slug)
-          ? 0
-          : p.monthlyPrice / Math.max(p.seriesAvailable.length, 1),
-      }));
+    // 4. Build series info with platform availability
+    const seriesInfoList: SeriesInfo[] = [];
 
-    // Active subscriptions: user already pays, covered automatically
-    const activeSubPlatforms = scoredPlatforms.filter((p) => p.isActiveSub);
-    // Always-on: platforms the user wants to keep in rotation permanently
-    const alwaysOnPlatforms = scoredPlatforms.filter((p) =>
-      alwaysOnSlugs.includes(p.slug) && !p.isActiveSub
-    );
-    const alwaysOnCost = alwaysOnPlatforms.reduce(
-      (sum, p) => sum + (p.isFree ? 0 : p.monthlyPrice),
-      0
-    );
-    const remainingBudget = Math.max(0, monthlyBudget - alwaysOnCost);
+    for (const item of watchlistItems) {
+      const runtime = item.series.episodeRunTime || DEFAULT_EPISODE_RUNTIME;
+      const totalEpisodes = item.series.numberOfEpisodes || 1;
 
-    // Sort by: free first, then best score/cost ratio
-    scoredPlatforms.sort((a, b) => {
-      if (a.isFree && !b.isFree) return -1;
-      if (!a.isFree && b.isFree) return 1;
-      const ratioA = a.monthlyPrice > 0 ? a.score / a.monthlyPrice : a.score * 100;
-      const ratioB = b.monthlyPrice > 0 ? b.score / b.monthlyPrice : b.score * 100;
-      return ratioB - ratioA;
-    });
-
-    // 6. Generate monthly plans using greedy set cover with budget constraint
-    const now = new Date();
-    const plans = [];
-
-    const uncoveredSeries = new Set(
-      watchlistItems.map((w) => w.series.id)
-    );
-
-    // Pre-cover series available on active subscriptions (user already has them)
-    const activeSubCoverage: (typeof scoredPlatforms[0] & { coveredSeries: typeof scoredPlatforms[0]["seriesAvailable"] })[] = [];
-    for (const asp of activeSubPlatforms) {
-      const covered = asp.seriesAvailable.filter((s) =>
-        uncoveredSeries.has(s.seriesId)
-      );
-      if (covered.length > 0) {
-        covered.forEach((s) => uncoveredSeries.delete(s.seriesId));
-        activeSubCoverage.push({ ...asp, coveredSeries: covered });
-      }
-    }
-
-    for (let m = 0; m < monthsAhead && uncoveredSeries.size > 0; m++) {
-      const planMonth = ((now.getMonth() + m) % 12) + 1;
-      const planYear =
-        now.getFullYear() + Math.floor((now.getMonth() + m) / 12);
-
-      let monthCost = 0;
-      const monthPlatforms: (PlatformScore & { coveredSeries: typeof scoredPlatforms[0]["seriesAvailable"] })[] = [];
-
-      // Always include always-on platforms first
-      for (const aop of alwaysOnPlatforms) {
-        const covered = aop.seriesAvailable.filter((s) =>
-          uncoveredSeries.has(s.seriesId)
+      let watchedEpisodes = 0;
+      if (item.watchlist.status === "watching" && item.watchlist.currentSeason && item.watchlist.currentEpisode) {
+        const avgEpPerSeason = Math.ceil(totalEpisodes / (item.series.numberOfSeasons || 1));
+        watchedEpisodes = Math.min(
+          totalEpisodes - 1,
+          (item.watchlist.currentSeason - 1) * avgEpPerSeason + item.watchlist.currentEpisode
         );
-        if (covered.length > 0) {
-          covered.forEach((s) => uncoveredSeries.delete(s.seriesId));
-          monthPlatforms.push({ ...aop, coveredSeries: covered });
-          if (!aop.isFree) monthCost += aop.monthlyPrice;
-        }
       }
 
-      // Then add free platforms
-      const freePlatforms = scoredPlatforms
-        .filter(
-          (p) =>
-            p.isFree &&
-            !p.isActiveSub &&
-            !alwaysOnSlugs.includes(p.slug) &&
-            p.seriesAvailable.some((s) => uncoveredSeries.has(s.seriesId))
-        )
-        .map((p) => {
-          const covered = p.seriesAvailable.filter((s) =>
-            uncoveredSeries.has(s.seriesId)
-          );
-          covered.forEach((s) => uncoveredSeries.delete(s.seriesId));
-          return { ...p, coveredSeries: covered };
+      const remainingEpisodes = Math.max(1, totalEpisodes - watchedEpisodes);
+      const totalMinutes = remainingEpisodes * runtime;
+
+      // Get platforms for this series
+      const platformLinks = await db
+        .select({ platformId: seriesPlatforms.platformId })
+        .from(seriesPlatforms)
+        .where(eq(seriesPlatforms.seriesId, item.series.id));
+
+      const platformIds = platformLinks
+        .map((pl) => pl.platformId)
+        .filter((pid) => {
+          const p = platformById.get(pid);
+          return p && !excludedSlugs.includes(p.slug);
         });
 
-      // Find the best paid platform within remaining budget (exclude active subs)
-      let bestPlatform: PlatformScore | null = null;
-      let bestCoverage = 0;
-      let bestRatio = -1;
-
-      for (const platform of scoredPlatforms) {
-        if (platform.isFree || platform.isActiveSub || alwaysOnSlugs.includes(platform.slug)) continue;
-
-        // Budget constraint
-        if (monthCost + platform.monthlyPrice > monthlyBudget && monthlyBudget > 0) continue;
-
-        const coverage = platform.seriesAvailable.filter((s) =>
-          uncoveredSeries.has(s.seriesId)
-        ).length;
-
-        if (coverage === 0) continue;
-
-        const ratio = platform.monthlyPrice > 0
-          ? coverage / platform.monthlyPrice
-          : coverage * 100;
-
-        if (
-          coverage > bestCoverage ||
-          (coverage === bestCoverage && ratio > bestRatio)
-        ) {
-          bestPlatform = platform;
-          bestCoverage = coverage;
-          bestRatio = ratio;
-        }
-      }
-
-      // If no best platform found and no always-on covered anything, break
-      if (!bestPlatform && monthPlatforms.length === 0 && freePlatforms.length === 0) break;
-
-      let mainPlatformEntry;
-
-      if (bestPlatform) {
-        const coveredThisMonth = bestPlatform.seriesAvailable.filter((s) =>
-          uncoveredSeries.has(s.seriesId)
-        );
-        coveredThisMonth.forEach((s) => uncoveredSeries.delete(s.seriesId));
-        monthCost += bestPlatform.isFree ? 0 : bestPlatform.monthlyPrice;
-
-        mainPlatformEntry = {
-          ...bestPlatform,
-          coveredSeries: coveredThisMonth,
-        };
-      } else if (monthPlatforms.length > 0) {
-        // Use the always-on platform with most coverage as main
-        mainPlatformEntry = monthPlatforms[0];
-      } else {
-        // Only free platforms
-        mainPlatformEntry = freePlatforms[0];
-      }
-
-      if (!mainPlatformEntry) break;
-
-      // Separate always-on from main if main is not already always-on
-      const alwaysOnForMonth = monthPlatforms.filter(
-        (p) => p.platformId !== mainPlatformEntry!.platformId
-      );
-
-      plans.push({
-        month: planMonth,
-        year: planYear,
-        label: new Date(planYear, planMonth - 1).toLocaleDateString("it-IT", {
-          month: "long",
-          year: "numeric",
-        }),
-        mainPlatform: mainPlatformEntry,
-        alwaysOnPlatforms: alwaysOnForMonth,
-        freePlatforms: freePlatforms.filter(
-          (p) => p.platformId !== mainPlatformEntry!.platformId
-        ),
-        estimatedCost: monthCost,
-        seriesCovered:
-          mainPlatformEntry.coveredSeries.length +
-          freePlatforms.reduce((s, p) => s + p.coveredSeries.length, 0) +
-          alwaysOnForMonth.reduce((s, p) => s + p.coveredSeries.length, 0),
-        withinBudget: monthlyBudget === 0 || monthCost <= monthlyBudget,
+      seriesInfoList.push({
+        seriesId: item.series.id,
+        tmdbId: item.series.tmdbId,
+        name: item.series.name,
+        priority: item.watchlist.priority,
+        status: item.watchlist.status!,
+        remainingEpisodes,
+        episodeRunTime: runtime,
+        totalHours: Math.round(totalMinutes / 60 * 10) / 10,
+        platformIds,
       });
     }
 
-    // 7. Calculate savings (exclude active subs — user already pays for those)
-    const totalRotatablePlatforms = scoredPlatforms
-      .filter((p) => !p.isFree && !p.isActiveSub && p.seriesAvailable.length > 0)
-      .reduce((sum, p) => sum + p.monthlyPrice, 0);
+    // 5. Categorize series by coverage type
+    const coveredByActiveSub: { series: SeriesInfo; platform: PlatformInfo }[] = [];
+    const coveredByFree: { series: SeriesInfo; platform: PlatformInfo }[] = [];
+    const coveredByAlwaysOn: { series: SeriesInfo; platform: PlatformInfo }[] = [];
+    const needsRotation: SeriesInfo[] = [];
 
-    const rotationMonthlyCost =
-      plans.reduce((sum, p) => sum + p.estimatedCost, 0) / Math.max(plans.length, 1);
+    for (const s of seriesInfoList) {
+      // Check active subscriptions first
+      const activeSubPlatform = s.platformIds
+        .map((pid) => platformById.get(pid)!)
+        .find((p) => activeSubSlugs.includes(p.slug));
+      if (activeSubPlatform) {
+        coveredByActiveSub.push({ series: s, platform: activeSubPlatform });
+        continue;
+      }
 
-    const activeSubsCost = activeSubPlatforms.reduce(
-      (sum, p) => sum + (p.isFree ? 0 : p.monthlyPrice), 0
-    );
+      // Check free platforms
+      const freePlatform = s.platformIds
+        .map((pid) => platformById.get(pid)!)
+        .find((p) => p.isFree);
+      if (freePlatform) {
+        coveredByFree.push({ series: s, platform: freePlatform });
+        continue;
+      }
+
+      // Check always-on
+      const alwaysOnPlatform = s.platformIds
+        .map((pid) => platformById.get(pid)!)
+        .find((p) => alwaysOnSlugs.includes(p.slug));
+      if (alwaysOnPlatform) {
+        coveredByAlwaysOn.push({ series: s, platform: alwaysOnPlatform });
+        continue;
+      }
+
+      // Needs rotation
+      needsRotation.push(s);
+    }
+
+    // 6. Assign rotation series to best platforms using greedy set-cover
+    // Group by platform, pick platform that covers the most weighted hours
+    const assignments: { platform: PlatformInfo; seriesList: SeriesInfo[]; totalHours: number; monthsNeeded: number }[] = [];
+    const assigned = new Set<string>();
+
+    const remaining = [...needsRotation];
+
+    while (remaining.length > 0) {
+      // Score each platform by how many unassigned series it covers
+      let bestPlatformId: string | null = null;
+      let bestScore = -1;
+      let bestCoverage: SeriesInfo[] = [];
+
+      const candidatePlatforms = new Map<string, SeriesInfo[]>();
+
+      for (const s of remaining) {
+        if (assigned.has(s.seriesId)) continue;
+        for (const pid of s.platformIds) {
+          const p = platformById.get(pid);
+          if (!p || p.isFree || activeSubSlugs.includes(p.slug) || alwaysOnSlugs.includes(p.slug)) continue;
+          if (!candidatePlatforms.has(pid)) candidatePlatforms.set(pid, []);
+          candidatePlatforms.get(pid)!.push(s);
+        }
+      }
+
+      if (candidatePlatforms.size === 0) break; // remaining series have no available platforms
+
+      for (const [pid, coveringSeries] of candidatePlatforms) {
+        const p = platformById.get(pid)!;
+        // Score: weighted series count / cost
+        const weightedScore = coveringSeries.reduce((sum, s) => {
+          const prioW = s.priority === "high" ? 3 : s.priority === "medium" ? 2 : 1;
+          const statusW = s.status === "watching" ? 2 : 1;
+          return sum + prioW * statusW;
+        }, 0);
+        const score = p.monthlyPrice > 0 ? weightedScore / p.monthlyPrice : weightedScore * 100;
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestPlatformId = pid;
+          bestCoverage = coveringSeries;
+        }
+      }
+
+      if (!bestPlatformId) break;
+
+      const platform = platformById.get(bestPlatformId)!;
+      const totalHours = bestCoverage.reduce((sum, s) => sum + s.totalHours, 0);
+      const monthsNeeded = monthlyViewingHours > 0
+        ? Math.max(1, Math.ceil(totalHours / monthlyViewingHours))
+        : 1;
+
+      assignments.push({
+        platform,
+        seriesList: bestCoverage,
+        totalHours,
+        monthsNeeded,
+      });
+
+      bestCoverage.forEach((s) => assigned.add(s.seriesId));
+      // Remove assigned from remaining
+      for (let i = remaining.length - 1; i >= 0; i--) {
+        if (assigned.has(remaining[i].seriesId)) remaining.splice(i, 1);
+      }
+    }
+
+    // Sort assignments: highest priority first, then by score
+    assignments.sort((a, b) => {
+      const prioA = Math.max(...a.seriesList.map((s) => s.priority === "high" ? 3 : s.priority === "medium" ? 2 : 1));
+      const prioB = Math.max(...b.seriesList.map((s) => s.priority === "high" ? 3 : s.priority === "medium" ? 2 : 1));
+      if (prioA !== prioB) return prioB - prioA;
+      return b.totalHours - a.totalHours;
+    });
+
+    // 7. Build month-by-month plan
+    const now = new Date();
+    const plans = [];
+    let monthIndex = 0;
+
+    // Always-on cost
+    const alwaysOnCost = coveredByAlwaysOn.reduce((sum, { platform }) => {
+      return sum + (platform.isFree ? 0 : platform.monthlyPrice);
+    }, 0);
+    // Deduplicate always-on platforms
+    const alwaysOnPlatformSet = new Set(coveredByAlwaysOn.map((a) => a.platform.slug));
+    const uniqueAlwaysOnCost = [...alwaysOnPlatformSet].reduce((sum, slug) => {
+      const p = platformBySlug.get(slug);
+      return sum + (p && !p.isFree ? p.monthlyPrice : 0);
+    }, 0);
+
+    for (const assignment of assignments) {
+      for (let m = 0; m < assignment.monthsNeeded && monthIndex < monthsAhead; m++) {
+        const planMonth = ((now.getMonth() + monthIndex) % 12) + 1;
+        const planYear = now.getFullYear() + Math.floor((now.getMonth() + monthIndex) / 12);
+
+        const monthCost = (assignment.platform.isFree ? 0 : assignment.platform.monthlyPrice) + uniqueAlwaysOnCost;
+        const isFirstMonth = m === 0;
+        const isLastMonth = m === assignment.monthsNeeded - 1;
+
+        // Calculate hours for this specific month
+        const hoursThisMonth = isLastMonth
+          ? assignment.totalHours - m * monthlyViewingHours
+          : Math.min(monthlyViewingHours, assignment.totalHours - m * monthlyViewingHours);
+
+        plans.push({
+          month: planMonth,
+          year: planYear,
+          label: new Date(planYear, planMonth - 1).toLocaleDateString("it-IT", {
+            month: "long",
+            year: "numeric",
+          }),
+          mainPlatform: {
+            platformId: assignment.platform.platformId,
+            name: assignment.platform.name,
+            slug: assignment.platform.slug,
+            color: assignment.platform.color,
+            monthlyPrice: assignment.platform.monthlyPrice,
+            isFree: assignment.platform.isFree,
+            coveredSeries: isFirstMonth
+              ? assignment.seriesList.map((s) => ({
+                  seriesId: s.seriesId,
+                  tmdbId: s.tmdbId,
+                  name: s.name,
+                  priority: s.priority,
+                  status: s.status,
+                  episodes: s.remainingEpisodes,
+                  hours: s.totalHours,
+                }))
+              : [], // only show series list on first month
+          },
+          alwaysOnPlatforms: coveredByAlwaysOn.length > 0
+            ? [...alwaysOnPlatformSet].map((slug) => {
+                const p = platformBySlug.get(slug)!;
+                const seriesOnPlatform = coveredByAlwaysOn
+                  .filter((a) => a.platform.slug === slug)
+                  .map((a) => ({ name: a.series.name, priority: a.series.priority }));
+                return { ...p, coveredSeries: isFirstMonth && monthIndex === 0 ? seriesOnPlatform : [] };
+              })
+            : [],
+          freePlatforms: monthIndex === 0 && isFirstMonth
+            ? [...new Set(coveredByFree.map((f) => f.platform.slug))].map((slug) => {
+                const p = platformBySlug.get(slug)!;
+                const seriesOnPlatform = coveredByFree
+                  .filter((f) => f.platform.slug === slug)
+                  .map((f) => ({ name: f.series.name, priority: f.series.priority }));
+                return { ...p, coveredSeries: seriesOnPlatform };
+              })
+            : [],
+          estimatedCost: monthCost,
+          totalHoursOnPlatform: Math.round(assignment.totalHours * 10) / 10,
+          viewingHoursThisMonth: Math.round(Math.max(0, hoursThisMonth) * 10) / 10,
+          monthsForPlatform: assignment.monthsNeeded,
+          currentMonthOfPlatform: m + 1,
+          seriesCovered: assignment.seriesList.length,
+          withinBudget: monthlyBudget === 0 || monthCost <= monthlyBudget,
+        });
+
+        monthIndex++;
+      }
+    }
+
+    // If there are months left in the plan horizon with nothing to rotate
+    // (all series covered), fill remaining as "no rotation needed"
+
+    // 8. Calculate savings
+    const allRotatablePlatformSlugs = new Set<string>();
+    assignments.forEach((a) => allRotatablePlatformSlugs.add(a.platform.slug));
+
+    const totalIfAllActive = [...allRotatablePlatformSlugs].reduce((sum, slug) => {
+      const p = platformBySlug.get(slug);
+      return sum + (p ? p.monthlyPrice : 0);
+    }, 0) + uniqueAlwaysOnCost;
+
+    const rotationMonthlyCost = plans.length > 0
+      ? plans.reduce((sum, p) => sum + p.estimatedCost, 0) / plans.length
+      : 0;
+
+    const activeSubsCost = [...new Set(coveredByActiveSub.map((a) => a.platform.slug))].reduce((sum, slug) => {
+      const p = platformBySlug.get(slug);
+      return sum + (p && !p.isFree ? p.monthlyPrice : 0);
+    }, 0);
+
+    // Uncovered series (no platform available)
+    const uncoveredSeries = needsRotation.filter((s) => !assigned.has(s.seriesId));
 
     return NextResponse.json({
       plans,
-      activeSubscriptions: activeSubCoverage.map((a) => ({
-        name: a.name,
-        slug: a.slug,
-        color: a.color,
-        monthlyPrice: a.monthlyPrice,
-        seriesCovered: a.coveredSeries.length,
-        coveredSeries: a.coveredSeries,
-      })),
+      activeSubscriptions: (() => {
+        const grouped = new Map<string, { platform: PlatformInfo; series: SeriesInfo[] }>();
+        for (const { series: s, platform: p } of coveredByActiveSub) {
+          if (!grouped.has(p.slug)) grouped.set(p.slug, { platform: p, series: [] });
+          grouped.get(p.slug)!.series.push(s);
+        }
+        return [...grouped.values()].map((g) => ({
+          name: g.platform.name,
+          slug: g.platform.slug,
+          color: g.platform.color,
+          monthlyPrice: g.platform.monthlyPrice,
+          seriesCovered: g.series.length,
+          totalHours: Math.round(g.series.reduce((s, ser) => s + ser.totalHours, 0) * 10) / 10,
+          coveredSeries: g.series.map((s) => ({
+            name: s.name,
+            priority: s.priority,
+            episodes: s.remainingEpisodes,
+            hours: s.totalHours,
+          })),
+        }));
+      })(),
+      uncoveredSeries: uncoveredSeries.map((s) => ({ name: s.name, tmdbId: s.tmdbId })),
       summary: {
         monthlyBudget,
-        alwaysOnCost,
+        weeklyHours,
+        monthlyViewingHours: Math.round(monthlyViewingHours * 10) / 10,
+        alwaysOnCost: uniqueAlwaysOnCost,
         activeSubsCost,
-        totalPlatformsCost: totalRotatablePlatforms,
+        totalPlatformsCost: totalIfAllActive,
         rotationMonthlyCost: Math.round(rotationMonthlyCost * 100) / 100,
-        monthlySavings:
-          Math.round((totalRotatablePlatforms - rotationMonthlyCost) * 100) / 100,
-        watchlistTotal: watchlistItems.length,
-        seriesCoveredByActiveSubs: activeSubCoverage.reduce(
-          (s, a) => s + a.coveredSeries.length, 0
-        ),
-        platformsNeeded: new Set(plans.map((p) => p.mainPlatform.platformId))
-          .size,
-        alwaysOnPlatforms: alwaysOnSlugs,
+        monthlySavings: Math.round((totalIfAllActive - rotationMonthlyCost) * 100) / 100,
+        watchlistTotal: seriesInfoList.length,
+        totalViewingHours: Math.round(seriesInfoList.reduce((s, si) => s + si.totalHours, 0) * 10) / 10,
+        seriesCoveredByActiveSubs: coveredByActiveSub.length,
+        seriesCoveredByFree: coveredByFree.length,
+        platformsNeeded: allRotatablePlatformSlugs.size,
+        monthsInPlan: plans.length,
+        alwaysOnPlatforms: [...alwaysOnPlatformSet],
         activeSubscriptions: activeSubSlugs,
       },
-      scoredPlatforms,
     });
   } catch (error) {
     console.error("Rotation plan error:", error);
