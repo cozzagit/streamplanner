@@ -114,11 +114,19 @@ export default function WatchlistPage() {
 
   if (loading) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-6">
         <div className="skeleton h-8 w-48" />
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="skeleton h-24 w-full" />
-        ))}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+          {Array.from({ length: 12 }).map((_, i) => (
+            <div key={i} className="rounded-xl overflow-hidden">
+              <div className="skeleton aspect-[2/3] w-full" />
+              <div className="p-3 space-y-2">
+                <div className="skeleton h-4 w-3/4" />
+                <div className="skeleton h-3 w-1/2" />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -185,18 +193,18 @@ export default function WatchlistPage() {
         ))}
       </div>
 
-      {/* List */}
+      {/* Cards Grid */}
       {filtered.length === 0 ? (
         <div className="text-center py-16">
           <List size={48} className="mx-auto text-text-secondary/30 mb-4" />
           <p className="text-text-secondary">
             {items.length === 0
-              ? "La tua watchlist e vuota. Esplora e aggiungi serie!"
+              ? "La tua watchlist è vuota. Esplora e aggiungi serie!"
               : "Nessuna serie con questi filtri"}
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
           {filtered.map((item) => {
             const statusCfg =
               STATUS_CONFIG[item.status as keyof typeof STATUS_CONFIG];
@@ -213,57 +221,92 @@ export default function WatchlistPage() {
             return (
               <div
                 key={item.id}
-                className="flex items-center gap-4 p-4 rounded-xl bg-bg-card border border-border hover:border-accent/30 transition-colors group"
+                className="rounded-xl bg-bg-card border border-border hover:border-accent/30 transition-all hover:shadow-lg hover:shadow-accent/5 group overflow-hidden flex flex-col"
               >
-                {/* Poster */}
+                {/* Poster with overlay */}
                 <Link
                   href={`/serie/${item.series.tmdbId}`}
-                  className="flex-shrink-0"
+                  className="relative aspect-[2/3] block overflow-hidden"
                 >
-                  <div className="w-16 h-24 rounded-lg overflow-hidden relative">
-                    <Image
-                      src={imageUrl(item.series.posterPath, "w154")}
-                      alt={item.series.name}
-                      fill
-                      className="object-cover"
-                      sizes="64px"
-                    />
+                  <Image
+                    src={imageUrl(item.series.posterPath, "w342")}
+                    alt={item.series.name}
+                    fill
+                    className="object-cover transition-transform group-hover:scale-105"
+                    sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
+                  />
+                  {/* Top badges */}
+                  <div className="absolute top-2 left-2 right-2 flex justify-between items-start">
+                    <span className="flex items-center gap-1 text-[11px] font-medium bg-black/70 backdrop-blur-sm text-white px-2 py-1 rounded-md">
+                      <Star size={11} className="text-warning fill-warning" />
+                      {item.series.voteAverage?.toFixed(1)}
+                    </span>
+                    {priorityCfg && (
+                      <span className={`text-[10px] font-semibold px-2 py-1 rounded-md backdrop-blur-sm ${
+                        item.priority === "high"
+                          ? "bg-danger/80 text-white"
+                          : item.priority === "medium"
+                          ? "bg-warning/80 text-black"
+                          : "bg-black/50 text-white/70"
+                      }`}>
+                        {priorityCfg.label}
+                      </span>
+                    )}
                   </div>
+                  {/* Bottom gradient overlay */}
+                  <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/80 to-transparent" />
+                  {/* Status badge on poster */}
+                  <div className="absolute bottom-2 left-2 flex items-center gap-1.5">
+                    <StatusIcon size={13} className="text-white" />
+                    <span className="text-[11px] font-medium text-white">
+                      {statusCfg?.label}
+                    </span>
+                  </div>
+                  {/* Seasons info */}
+                  <span className="absolute bottom-2 right-2 text-[10px] text-white/70 font-medium">
+                    {item.series.numberOfSeasons}S &middot; {item.series.numberOfEpisodes}E
+                  </span>
+                  {/* Delete button */}
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      removeItem(item.series.tmdbId);
+                    }}
+                    className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/60 backdrop-blur-sm text-white/70 hover:text-danger hover:bg-danger/20 transition-all opacity-0 group-hover:opacity-100"
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </Link>
 
-                {/* Info */}
-                <div className="flex-1 min-w-0">
+                {/* Card body */}
+                <div className="p-3 flex flex-col gap-2 flex-1">
                   <Link href={`/serie/${item.series.tmdbId}`}>
-                    <h3 className="font-semibold text-text-primary truncate hover:text-accent-light transition-colors">
+                    <h3 className="font-semibold text-sm text-text-primary line-clamp-2 leading-tight hover:text-accent-light transition-colors">
                       {item.series.name}
                     </h3>
                   </Link>
-                  <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    <span className="flex items-center gap-1 text-xs text-text-secondary">
-                      <Star size={12} className="text-warning fill-warning" />
-                      {item.series.voteAverage?.toFixed(1)}
-                    </span>
-                    <span className="text-xs text-text-secondary">
-                      {item.series.numberOfSeasons}S &middot;{" "}
-                      {item.series.numberOfEpisodes}E
-                    </span>
-                    {genres.slice(0, 2).map((g: string) => (
-                      <span
-                        key={g}
-                        className="text-[10px] px-2 py-0.5 rounded-full bg-bg-secondary text-text-secondary"
-                      >
-                        {g}
-                      </span>
-                    ))}
-                  </div>
+
+                  {/* Genres */}
+                  {genres.length > 0 && (
+                    <div className="flex gap-1 flex-wrap">
+                      {genres.slice(0, 2).map((g: string) => (
+                        <span
+                          key={g}
+                          className="text-[10px] px-1.5 py-0.5 rounded bg-bg-secondary text-text-secondary"
+                        >
+                          {g}
+                        </span>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Platforms */}
                   {item.platforms.length > 0 && (
-                    <div className="flex gap-1 mt-2">
+                    <div className="flex gap-1 flex-wrap mt-auto">
                       {item.platforms.map((p) => (
                         <span
                           key={p.platformSlug}
-                          className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+                          className="text-[10px] px-1.5 py-0.5 rounded font-medium"
                           style={{
                             backgroundColor: p.platformColor + "20",
                             color: p.platformColor,
@@ -274,57 +317,46 @@ export default function WatchlistPage() {
                       ))}
                     </div>
                   )}
-                </div>
 
-                {/* Status & Priority */}
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {/* Priority selector */}
-                  <select
-                    value={item.priority}
-                    onChange={(e) =>
-                      updateItem(item.id, { priority: e.target.value })
-                    }
-                    className={`appearance-none px-2 py-1 rounded-full text-[10px] font-medium border-0 cursor-pointer focus:outline-none ${priorityCfg?.color}`}
-                  >
-                    {Object.entries(PRIORITY_CONFIG).map(([k, v]) => (
-                      <option key={k} value={k}>
-                        {v.label}
-                      </option>
-                    ))}
-                  </select>
-
-                  {/* Status selector */}
-                  <div className="relative">
+                  {/* Selectors */}
+                  <div className="flex gap-1.5 mt-1">
+                    <div className="relative flex-1">
+                      <select
+                        value={item.status}
+                        onChange={(e) =>
+                          updateItem(item.id, { status: e.target.value })
+                        }
+                        className={`appearance-none w-full pl-6 pr-5 py-1.5 rounded-lg text-[11px] font-medium bg-bg-secondary border border-border cursor-pointer focus:outline-none focus:border-accent ${statusCfg?.color}`}
+                      >
+                        {Object.entries(STATUS_CONFIG).map(([k, v]) => (
+                          <option key={k} value={k}>
+                            {v.label}
+                          </option>
+                        ))}
+                      </select>
+                      <StatusIcon
+                        size={12}
+                        className={`absolute left-1.5 top-1/2 -translate-y-1/2 ${statusCfg?.color} pointer-events-none`}
+                      />
+                      <ChevronDown
+                        size={10}
+                        className="absolute right-1 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none"
+                      />
+                    </div>
                     <select
-                      value={item.status}
+                      value={item.priority}
                       onChange={(e) =>
-                        updateItem(item.id, { status: e.target.value })
+                        updateItem(item.id, { priority: e.target.value })
                       }
-                      className={`appearance-none pl-7 pr-6 py-1.5 rounded-lg text-xs font-medium bg-bg-secondary border border-border cursor-pointer focus:outline-none focus:border-accent ${statusCfg?.color}`}
+                      className={`appearance-none px-2 py-1.5 rounded-lg text-[11px] font-medium border border-border cursor-pointer focus:outline-none focus:border-accent ${priorityCfg?.color}`}
                     >
-                      {Object.entries(STATUS_CONFIG).map(([k, v]) => (
+                      {Object.entries(PRIORITY_CONFIG).map(([k, v]) => (
                         <option key={k} value={k}>
                           {v.label}
                         </option>
                       ))}
                     </select>
-                    <StatusIcon
-                      size={14}
-                      className={`absolute left-2 top-1/2 -translate-y-1/2 ${statusCfg?.color}`}
-                    />
-                    <ChevronDown
-                      size={12}
-                      className="absolute right-1.5 top-1/2 -translate-y-1/2 text-text-secondary"
-                    />
                   </div>
-
-                  {/* Delete */}
-                  <button
-                    onClick={() => removeItem(item.series.tmdbId)}
-                    className="p-2 rounded-lg text-text-secondary hover:text-danger hover:bg-danger/10 transition-colors opacity-0 group-hover:opacity-100"
-                  >
-                    <Trash2 size={16} />
-                  </button>
                 </div>
               </div>
             );
