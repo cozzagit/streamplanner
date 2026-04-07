@@ -22,6 +22,7 @@ interface WatchlistItem {
   priority: string;
   currentSeason: number | null;
   currentEpisode: number | null;
+  watchedEpisodes: number;
   addedAt: string;
   series: {
     id: string;
@@ -317,6 +318,31 @@ export default function WatchlistPage() {
                       ))}
                     </div>
                   )}
+
+                  {/* Watched progress */}
+                  <div className="flex items-center gap-1.5 mt-auto">
+                    <span className="text-[10px] text-text-secondary">Visti</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={item.series.numberOfEpisodes}
+                      value={item.watchedEpisodes || 0}
+                      onChange={(e) => {
+                        const val = Math.max(0, Math.min(item.series.numberOfEpisodes, Number(e.target.value) || 0));
+                        updateItem(item.id, { watchedEpisodes: val });
+                      }}
+                      className="w-12 px-1.5 py-1 rounded-md text-[11px] text-center font-medium bg-bg-secondary border border-border text-text-primary focus:outline-none focus:border-accent tabular-nums"
+                    />
+                    <span className="text-[10px] text-text-secondary">/ {item.series.numberOfEpisodes}</span>
+                    {item.watchedEpisodes > 0 && item.series.numberOfEpisodes > 0 && (
+                      <div className="flex-1 h-1 bg-bg-secondary rounded-full overflow-hidden ml-1">
+                        <div
+                          className="h-full bg-accent rounded-full"
+                          style={{ width: `${Math.round((item.watchedEpisodes / item.series.numberOfEpisodes) * 100)}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
 
                   {/* Selectors */}
                   <div className="flex gap-1.5 mt-1">
