@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -55,6 +55,52 @@ const PRIORITY_CONFIG = {
   medium: { label: "Media", color: "bg-warning/20 text-warning" },
   low: { label: "Bassa", color: "bg-text-secondary/20 text-text-secondary" },
 };
+
+function WatchedSlider({
+  watchedEpisodes,
+  totalEpisodes,
+  onCommit,
+}: {
+  watchedEpisodes: number;
+  totalEpisodes: number;
+  onCommit: (val: number) => void;
+}) {
+  const [localValue, setLocalValue] = useState(watchedEpisodes);
+  const [isDragging, setIsDragging] = useState(false);
+
+  // Sync local value when prop changes (e.g., after API update)
+  useEffect(() => {
+    if (!isDragging) setLocalValue(watchedEpisodes);
+  }, [watchedEpisodes, isDragging]);
+
+  const pct = totalEpisodes > 0 ? Math.round((localValue / totalEpisodes) * 100) : 0;
+
+  return (
+    <div className="mt-auto space-y-1">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] text-text-secondary">
+          {localValue} / {totalEpisodes} ep visti
+        </span>
+        <span className="text-[10px] font-medium text-accent-light tabular-nums">
+          {pct}%
+        </span>
+      </div>
+      <input
+        type="range"
+        min={0}
+        max={totalEpisodes}
+        step={1}
+        value={localValue}
+        onChange={(e) => setLocalValue(Number(e.target.value))}
+        onMouseDown={() => setIsDragging(true)}
+        onTouchStart={() => setIsDragging(true)}
+        onMouseUp={() => { setIsDragging(false); onCommit(localValue); }}
+        onTouchEnd={() => { setIsDragging(false); onCommit(localValue); }}
+        className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-accent bg-bg-secondary [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white"
+      />
+    </div>
+  );
+}
 
 export default function WatchlistPage() {
   const [items, setItems] = useState<WatchlistItem[]>([]);
@@ -319,30 +365,14 @@ export default function WatchlistPage() {
                     </div>
                   )}
 
-                  {/* Watched progress */}
-                  <div className="flex items-center gap-1.5 mt-auto">
-                    <span className="text-[10px] text-text-secondary">Visti</span>
-                    <input
-                      type="number"
-                      min={0}
-                      max={item.series.numberOfEpisodes}
-                      value={item.watchedEpisodes || 0}
-                      onChange={(e) => {
-                        const val = Math.max(0, Math.min(item.series.numberOfEpisodes, Number(e.target.value) || 0));
-                        updateItem(item.id, { watchedEpisodes: val });
-                      }}
-                      className="w-12 px-1.5 py-1 rounded-md text-[11px] text-center font-medium bg-bg-secondary border border-border text-text-primary focus:outline-none focus:border-accent tabular-nums"
+                  {/* Watched progress — interactive slider */}
+                  {item.series.numberOfEpisodes > 0 && (
+                    <WatchedSlider
+                      watchedEpisodes={item.watchedEpisodes || 0}
+                      totalEpisodes={item.series.numberOfEpisodes}
+                      onCommit={(val) => updateItem(item.id, { watchedEpisodes: val })}
                     />
-                    <span className="text-[10px] text-text-secondary">/ {item.series.numberOfEpisodes}</span>
-                    {item.watchedEpisodes > 0 && item.series.numberOfEpisodes > 0 && (
-                      <div className="flex-1 h-1 bg-bg-secondary rounded-full overflow-hidden ml-1">
-                        <div
-                          className="h-full bg-accent rounded-full"
-                          style={{ width: `${Math.round((item.watchedEpisodes / item.series.numberOfEpisodes) * 100)}%` }}
-                        />
-                      </div>
-                    )}
-                  </div>
+                  )}
 
                   {/* Selectors */}
                   <div className="flex gap-1.5 mt-1">
