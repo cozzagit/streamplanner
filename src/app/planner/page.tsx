@@ -101,7 +101,7 @@ export default function PlannerPage() {
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/rotation?months=${months}`)
+    fetch(`/api/rotation?months=${months}&_t=${Date.now()}`)
       .then((r) => r.json())
       .then(setData)
       .catch(() => setData(null))

@@ -136,7 +136,7 @@ function ScheduleView() {
   const [marking, setMarking] = useState<string | null>(null);
 
   const fetchSchedule = () => {
-    fetch("/api/schedule")
+    fetch(`/api/schedule?_t=${Date.now()}`)
       .then((r) => r.json())
       .then((d) => setData(d))
       .catch(() => setData(null))
