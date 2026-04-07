@@ -34,6 +34,7 @@ interface WatchlistItem {
     numberOfEpisodes: number;
     status: string;
     genres: string;
+    seasonsData: string | null;
     firstAirDate: string;
   };
   platforms: {
@@ -59,45 +60,120 @@ const PRIORITY_CONFIG = {
 function WatchedSlider({
   watchedEpisodes,
   totalEpisodes,
+  seasonsJson,
   onCommit,
 }: {
   watchedEpisodes: number;
   totalEpisodes: number;
+  seasonsJson: string | null;
   onCommit: (val: number) => void;
 }) {
   const [localValue, setLocalValue] = useState(watchedEpisodes);
   const [isDragging, setIsDragging] = useState(false);
 
-  // Sync local value when prop changes (e.g., after API update)
   useEffect(() => {
     if (!isDragging) setLocalValue(watchedEpisodes);
   }, [watchedEpisodes, isDragging]);
 
-  const pct = totalEpisodes > 0 ? Math.round((localValue / totalEpisodes) * 100) : 0;
+  // Parse seasons to build cumulative episode markers
+  let seasons: { season: number; episodes: number; cumulative: number }[] = [];
+  try {
+    const raw = seasonsJson ? JSON.parse(seasonsJson) : [];
+    let cumulative = 0;
+    seasons = raw.map((s: { season: number; episodes: number }) => {
+      cumulative += s.episodes;
+      return { season: s.season, episodes: s.episodes, cumulative };
+    });
+  } catch { /* */ }
+
+  // Find which season the current value is in
+  const currentSeason = seasons.find((s, i) => {
+    const prev = i > 0 ? seasons[i - 1].cumulative : 0;
+    return localValue > prev && localValue <= s.cumulative;
+  }) || (localValue === 0 ? null : seasons[seasons.length - 1]);
+
+  const seasonLabel = currentSeason
+    ? `S${currentSeason.season}`
+    : localValue === 0 ? "Non iniziata" : "";
 
   return (
-    <div className="mt-auto space-y-1">
+    <div className="mt-auto space-y-1.5">
       <div className="flex items-center justify-between">
         <span className="text-[10px] text-text-secondary">
-          {localValue} / {totalEpisodes} ep visti
+          {localValue} / {totalEpisodes} ep
+          {seasonLabel && <span className="ml-1 text-accent-light font-medium">({seasonLabel})</span>}
         </span>
         <span className="text-[10px] font-medium text-accent-light tabular-nums">
-          {pct}%
+          {totalEpisodes > 0 ? Math.round((localValue / totalEpisodes) * 100) : 0}%
         </span>
       </div>
-      <input
-        type="range"
-        min={0}
-        max={totalEpisodes}
-        step={1}
-        value={localValue}
-        onChange={(e) => setLocalValue(Number(e.target.value))}
-        onMouseDown={() => setIsDragging(true)}
-        onTouchStart={() => setIsDragging(true)}
-        onMouseUp={() => { setIsDragging(false); onCommit(localValue); }}
-        onTouchEnd={() => { setIsDragging(false); onCommit(localValue); }}
-        className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-accent bg-bg-secondary [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white"
-      />
+
+      {/* Slider with season ticks */}
+      <div className="relative">
+        <input
+          type="range"
+          min={0}
+          max={totalEpisodes}
+          step={1}
+          value={localValue}
+          onChange={(e) => setLocalValue(Number(e.target.value))}
+          onMouseDown={() => setIsDragging(true)}
+          onTouchStart={() => setIsDragging(true)}
+          onMouseUp={() => { setIsDragging(false); onCommit(localValue); }}
+          onTouchEnd={() => { setIsDragging(false); onCommit(localValue); }}
+          className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-accent bg-bg-secondary relative z-10 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white"
+        />
+
+        {/* Season tick marks + labels */}
+        {seasons.length > 1 && totalEpisodes > 0 && (
+          <div className="absolute inset-x-0 top-0 h-1.5 pointer-events-none">
+            {seasons.slice(0, -1).map((s) => {
+              const pct = (s.cumulative / totalEpisodes) * 100;
+              return (
+                <div
+                  key={s.season}
+                  className="absolute top-0 -translate-x-1/2"
+                  style={{ left: `${pct}%` }}
+                >
+                  <div className="w-0.5 h-3 bg-text-secondary/30 rounded-full" />
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Season buttons */}
+      {seasons.length > 1 && (
+        <div className="flex gap-1 flex-wrap">
+          {seasons.map((s) => {
+            const prev = seasons.find((x) => x.season === s.season - 1)?.cumulative || 0;
+            const isComplete = localValue >= s.cumulative;
+            const isPartial = localValue > prev && localValue < s.cumulative;
+            return (
+              <button
+                key={s.season}
+                type="button"
+                onClick={() => {
+                  const newVal = isComplete ? prev : s.cumulative;
+                  setLocalValue(newVal);
+                  onCommit(newVal);
+                }}
+                className={`text-[9px] px-1.5 py-0.5 rounded-md font-medium transition-colors ${
+                  isComplete
+                    ? "bg-accent/20 text-accent"
+                    : isPartial
+                    ? "bg-warning/20 text-warning"
+                    : "bg-bg-secondary text-text-secondary/60 hover:text-text-secondary"
+                }`}
+                title={`S${s.season}: ${s.episodes} ep (${isComplete ? "vista" : isPartial ? "in corso" : "da vedere"})`}
+              >
+                S{s.season}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -370,6 +446,7 @@ export default function WatchlistPage() {
                     <WatchedSlider
                       watchedEpisodes={item.watchedEpisodes || 0}
                       totalEpisodes={item.series.numberOfEpisodes}
+                      seasonsJson={item.series.seasonsData}
                       onCommit={(val) => updateItem(item.id, { watchedEpisodes: val })}
                     />
                   )}

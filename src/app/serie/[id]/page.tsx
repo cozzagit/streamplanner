@@ -17,6 +17,119 @@ import { imageUrl, GENRE_MAP } from "@/lib/tmdb";
 import { getPlatformByTmdbId } from "@/lib/platforms";
 import type { TMDBSeriesDetail, TMDBWatchProviderCountry } from "@/lib/tmdb";
 
+function WatchedProgress({
+  watchlistId,
+  watchedEpisodes,
+  totalEpisodes,
+  seasons,
+  onUpdate,
+}: {
+  watchlistId: string;
+  watchedEpisodes: number;
+  totalEpisodes: number;
+  seasons: { season: number; episodes: number }[];
+  onUpdate: (val: number) => void;
+}) {
+  const [localValue, setLocalValue] = useState(watchedEpisodes);
+  const [isDragging, setIsDragging] = useState(false);
+
+  useEffect(() => {
+    if (!isDragging) setLocalValue(watchedEpisodes);
+  }, [watchedEpisodes, isDragging]);
+
+  const commitValue = async (val: number) => {
+    await fetch(`/api/watchlist/${watchlistId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ watchedEpisodes: val }),
+    });
+    onUpdate(val);
+  };
+
+  // Build cumulative markers
+  let cumulative = 0;
+  const seasonMarkers = seasons.map((s) => {
+    cumulative += s.episodes;
+    return { season: s.season, episodes: s.episodes, cumulative };
+  });
+
+  const currentSeason = seasonMarkers.find((s, i) => {
+    const prev = i > 0 ? seasonMarkers[i - 1].cumulative : 0;
+    return localValue > prev && localValue <= s.cumulative;
+  });
+
+  const pct = totalEpisodes > 0 ? Math.round((localValue / totalEpisodes) * 100) : 0;
+
+  return (
+    <div className="mt-4 p-4 rounded-xl bg-bg-card border border-border space-y-3 max-w-md">
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-text-secondary">
+          <span className="font-medium text-text-primary">{localValue}</span> / {totalEpisodes} episodi visti
+          {currentSeason && (
+            <span className="ml-1.5 text-accent-light">(S{currentSeason.season})</span>
+          )}
+        </span>
+        <span className="text-sm font-bold text-accent-light tabular-nums">{pct}%</span>
+      </div>
+
+      <input
+        type="range"
+        min={0}
+        max={totalEpisodes}
+        step={1}
+        value={localValue}
+        onChange={(e) => setLocalValue(Number(e.target.value))}
+        onMouseDown={() => setIsDragging(true)}
+        onTouchStart={() => setIsDragging(true)}
+        onMouseUp={() => { setIsDragging(false); commitValue(localValue); }}
+        onTouchEnd={() => { setIsDragging(false); commitValue(localValue); }}
+        className="w-full h-2 rounded-full appearance-none cursor-pointer accent-accent bg-bg-secondary [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white"
+      />
+
+      {/* Season buttons */}
+      {seasonMarkers.length > 1 && (
+        <div className="flex gap-1.5 flex-wrap">
+          {seasonMarkers.map((s) => {
+            const prev = seasonMarkers.find((x) => x.season === s.season - 1)?.cumulative || 0;
+            const isComplete = localValue >= s.cumulative;
+            const isPartial = localValue > prev && localValue < s.cumulative;
+            return (
+              <button
+                key={s.season}
+                type="button"
+                onClick={() => {
+                  const newVal = isComplete ? prev : s.cumulative;
+                  setLocalValue(newVal);
+                  commitValue(newVal);
+                }}
+                className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-colors ${
+                  isComplete
+                    ? "bg-accent/20 text-accent"
+                    : isPartial
+                    ? "bg-warning/20 text-warning"
+                    : "bg-bg-secondary text-text-secondary/60 hover:text-text-secondary hover:bg-bg-secondary/80"
+                }`}
+                title={`Stagione ${s.season}: ${s.episodes} episodi`}
+              >
+                S{s.season}
+                <span className="ml-1 opacity-60">{s.episodes}ep</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface WatchlistData {
+  id: string;
+  watchedEpisodes: number;
+  status: string;
+  priority: string;
+  series: { tmdbId: number; numberOfEpisodes: number; seasonsData: string | null };
+}
+
 export default function SerieDetailPage({
   params,
 }: {
@@ -26,6 +139,7 @@ export default function SerieDetailPage({
   const [detail, setDetail] = useState<TMDBSeriesDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [inWatchlist, setInWatchlist] = useState(false);
+  const [watchlistItem, setWatchlistItem] = useState<WatchlistData | null>(null);
   const [adding, setAdding] = useState(false);
   const [activeSubs, setActiveSubs] = useState<string[]>([]);
 
@@ -44,12 +158,11 @@ export default function SerieDetailPage({
 
         setDetail(detailData);
         if (Array.isArray(watchlistData)) {
-          setInWatchlist(
-            watchlistData.some(
-              (w: { series: { tmdbId: number } }) =>
-                w.series.tmdbId === Number(id)
-            )
+          const found = watchlistData.find(
+            (w: WatchlistData) => w.series.tmdbId === Number(id)
           );
+          setInWatchlist(!!found);
+          setWatchlistItem(found || null);
         }
         if (settingsData.active_subscriptions) {
           try { setActiveSubs(JSON.parse(settingsData.active_subscriptions)); } catch { /* ignore */ }
@@ -74,13 +187,31 @@ export default function SerieDetailPage({
           body: JSON.stringify({ tmdbId: detail.id }),
         });
         setInWatchlist(false);
+        setWatchlistItem(null);
       } else {
-        await fetch("/api/watchlist", {
+        const res = await fetch("/api/watchlist", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ tmdbId: detail.id }),
         });
+        const data = await res.json();
         setInWatchlist(true);
+        if (data.item) {
+          setWatchlistItem({
+            id: data.item.id,
+            watchedEpisodes: 0,
+            status: data.item.status || "to_watch",
+            priority: data.item.priority || "medium",
+            series: {
+              tmdbId: detail.id,
+              numberOfEpisodes: detail.number_of_episodes,
+              seasonsData: JSON.stringify(
+                detail.seasons?.filter((s) => s.season_number > 0)
+                  .map((s) => ({ season: s.season_number, episodes: s.episode_count })) || []
+              ),
+            },
+          });
+        }
       }
     } finally {
       setAdding(false);
@@ -226,6 +357,20 @@ export default function SerieDetailPage({
               )}
               {inWatchlist ? "In Watchlist" : "Aggiungi alla Watchlist"}
             </button>
+
+            {/* Watched progress — shown when in watchlist */}
+            {inWatchlist && watchlistItem && detail.number_of_episodes > 0 && (
+              <WatchedProgress
+                watchlistId={watchlistItem.id}
+                watchedEpisodes={watchlistItem.watchedEpisodes || 0}
+                totalEpisodes={detail.number_of_episodes}
+                seasons={detail.seasons?.filter((s) => s.season_number > 0).map((s) => ({
+                  season: s.season_number,
+                  episodes: s.episode_count,
+                })) || []}
+                onUpdate={(val) => setWatchlistItem((prev) => prev ? { ...prev, watchedEpisodes: val } : null)}
+              />
+            )}
           </div>
         </div>
       </div>

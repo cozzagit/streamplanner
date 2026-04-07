@@ -79,6 +79,7 @@ export const series = pgTable("series", {
   numberOfSeasons: integer("number_of_seasons"),
   numberOfEpisodes: integer("number_of_episodes"),
   episodeRunTime: integer("episode_run_time"), // average minutes per episode
+  seasonsData: text("seasons_data"), // JSON: [{season, episodes, name}]
   genres: text("genres"),
   networks: text("networks"),
   lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),

@@ -68,6 +68,10 @@ export async function POST(req: NextRequest) {
     const avgRunTime = detail.episode_run_time?.length
       ? Math.round(detail.episode_run_time.reduce((a, b) => a + b, 0) / detail.episode_run_time.length)
       : null;
+    const seasonsData = detail.seasons
+      ?.filter((s) => s.season_number > 0) // exclude "Specials" (season 0)
+      .map((s) => ({ season: s.season_number, episodes: s.episode_count, name: s.name }))
+      || [];
 
     // Upsert serie
     const [seriesRecord] = await db
@@ -88,6 +92,7 @@ export async function POST(req: NextRequest) {
         numberOfSeasons: detail.number_of_seasons,
         numberOfEpisodes: detail.number_of_episodes,
         episodeRunTime: avgRunTime,
+        seasonsData: JSON.stringify(seasonsData),
         genres: JSON.stringify(detail.genres?.map((g) => g.name) || []),
         networks: JSON.stringify(detail.networks?.map((n) => n.name) || []),
         lastSyncedAt: new Date(),
@@ -104,6 +109,7 @@ export async function POST(req: NextRequest) {
           numberOfSeasons: detail.number_of_seasons,
           numberOfEpisodes: detail.number_of_episodes,
           episodeRunTime: avgRunTime,
+          seasonsData: JSON.stringify(seasonsData),
           lastSyncedAt: new Date(),
           updatedAt: new Date(),
         },
