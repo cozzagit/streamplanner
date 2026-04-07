@@ -18,6 +18,9 @@ import {
   Zap,
   ChevronRight,
   Loader2,
+  Clock,
+  PlayCircle,
+  SlidersHorizontal,
 } from "lucide-react";
 
 const FEATURES = [
@@ -25,42 +28,56 @@ const FEATURES = [
     icon: Search,
     title: "Esplora e Cerca",
     description:
-      "Sfoglia le serie trending, nuove e top rated. Cerca qualsiasi serie e scopri subito su quali piattaforme e disponibile in Italia.",
+      "Sfoglia le serie trending, nuove e top rated. Cerca qualsiasi serie e scopri su quali piattaforme e disponibile in Italia.",
     color: "#6366f1",
   },
   {
     icon: List,
-    title: "Watchlist Personale",
+    title: "Watchlist Smart",
     description:
-      "Aggiungi le serie che vuoi vedere. Organizzale per priorita e stato: da vedere, in corso, completate.",
+      "Aggiungi serie, imposta priorita e traccia il progresso con lo slider stagioni. Segna le stagioni gia viste con un tap.",
     color: "#22c55e",
   },
   {
     icon: RotateCcw,
     title: "Rotation Planner",
     description:
-      "L'algoritmo analizza la tua watchlist e crea il piano ottimale: quale piattaforma attivare ogni mese per vedere tutto spendendo il minimo.",
+      "L'algoritmo calcola quanto tempo serve per ogni piattaforma in base alle tue ore di visione, e crea il piano di rotazione ottimale.",
     color: "#f59e0b",
+  },
+  {
+    icon: PlayCircle,
+    title: "Calendario Programmazione",
+    description:
+      "Il calendario distribuisce le puntate giorno per giorno in base alle ore che dedichi alle serie. Segna gli episodi visti e il piano si ricalcola.",
+    color: "#818cf8",
+  },
+  {
+    icon: Clock,
+    title: "Programmazione Settimanale",
+    description:
+      "Imposta quante ore guardi ogni giorno della settimana. Il calendario e il planner si adattano al tuo ritmo reale.",
+    color: "#a855f7",
+  },
+  {
+    icon: DollarSign,
+    title: "Costi & Risparmio",
+    description:
+      "Confronta il costo di tutti gli abbonamenti necessari vs la rotazione intelligente. Proiezione annuale del risparmio.",
+    color: "#ef4444",
   },
   {
     icon: CalendarDays,
     title: "Calendario Uscite",
     description:
-      "Non perderti nessun episodio. Il calendario mostra tutte le uscite delle serie nella tua watchlist, mese per mese.",
-    color: "#818cf8",
-  },
-  {
-    icon: DollarSign,
-    title: "Analisi Costi",
-    description:
-      "Confronta quanto spenderesti con tutti gli abbonamenti attivi vs la rotazione intelligente. Proiezione annuale del risparmio.",
-    color: "#ef4444",
+      "Non perderti nessun episodio. Vedi tutte le date di uscita delle serie nella tua watchlist, mese per mese.",
+    color: "#06b6d4",
   },
   {
     icon: Users,
     title: "Multi-Utente",
     description:
-      "Ogni utente ha la propria watchlist, impostazioni e piano di rotazione. Condividi l'app con chi vuoi.",
+      "Ogni utente ha la propria watchlist, impostazioni e piano di rotazione personalizzato.",
     color: "#00E054",
   },
 ];
@@ -79,23 +96,23 @@ const PLATFORMS = [
 const STEPS = [
   {
     step: "01",
-    title: "Cerca le serie che ami",
-    description: "Usa i dati di TMDB per trovare qualsiasi serie TV e scoprire dove guardarla in Italia.",
+    title: "Costruisci la tua watchlist",
+    description: "Cerca le serie, aggiungile, imposta le priorita e segna le stagioni gia viste con lo slider.",
   },
   {
     step: "02",
-    title: "Costruisci la tua watchlist",
-    description: "Aggiungi le serie, imposta le priorita. Segna quelle che stai guardando e quelle da iniziare.",
+    title: "Configura le tue abitudini",
+    description: "Indica i tuoi abbonamenti attivi, il budget e quante ore guardi ogni giorno della settimana.",
   },
   {
     step: "03",
-    title: "Indica i tuoi abbonamenti",
-    description: "Di' a StreamPlanner quali piattaforme hai gia attive. Il planner ottimizza solo le rimanenti.",
+    title: "Ottieni il piano di rotazione",
+    description: "L'algoritmo calcola quanti mesi serve ogni piattaforma e crea il piano ottimale per priorita.",
   },
   {
     step: "04",
-    title: "Ottieni il piano di rotazione",
-    description: "L'algoritmo crea il piano mensile ottimale: attiva una piattaforma al mese, guarda tutto, risparmia.",
+    title: "Segui il calendario smart",
+    description: "Ogni giorno il calendario ti dice cosa guardare, su quale piattaforma, e segni il progresso.",
   },
 ];
 
@@ -149,8 +166,8 @@ export default function HomePage() {
           </h1>
 
           <p className="text-lg sm:text-xl text-text-secondary max-w-2xl mx-auto leading-relaxed">
-            StreamPlanner analizza le serie che vuoi guardare e crea il piano perfetto:
-            quale piattaforma attivare ogni mese per vedere tutto,{" "}
+            Traccia le serie, segna il progresso per stagione, e ottieni il piano perfetto:
+            quale piattaforma attivare ogni mese, cosa guardare ogni giorno,{" "}
             <span className="text-success font-semibold">risparmiando fino al 60%</span>.
           </p>
 
@@ -286,7 +303,7 @@ export default function HomePage() {
             </h2>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {FEATURES.map((f) => {
               const Icon = f.icon;
               return (
@@ -319,17 +336,17 @@ export default function HomePage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {[
                 "12 piattaforme streaming italiane",
-                "Dati aggiornati da TMDB",
-                "Disponibilita da JustWatch",
-                "Algoritmo di rotazione ottimale",
-                "Calendario uscite episodi",
-                "Analisi costi e proiezioni",
-                "Watchlist con priorita e stati",
-                "Impostazioni budget personalizzate",
-                "Segna abbonamenti attivi",
+                "Dati aggiornati da TMDB e JustWatch",
+                "Rotazione basata su tempo di visione",
+                "Calendario smart con programmazione giornaliera",
+                "Programmazione settimanale personalizzabile",
+                "Slider progresso con step per stagione",
+                "Segna episodi visti dal calendario",
+                "Calendario uscite nuovi episodi",
+                "Analisi costi con proiezione annuale",
+                "Watchlist con priorita e stati automatici",
+                "Budget e abbonamenti personalizzabili",
                 "Multi-utente con account separati",
-                "Responsive mobile-friendly",
-                "Dark theme di serie",
               ].map((item) => (
                 <div key={item} className="flex items-center gap-3">
                   <div className="w-5 h-5 rounded-full bg-success/10 flex items-center justify-center flex-shrink-0">
@@ -355,8 +372,8 @@ export default function HomePage() {
             Pronto a risparmiare sui tuoi abbonamenti?
           </h2>
           <p className="text-lg text-text-secondary max-w-xl mx-auto">
-            Crea il tuo account in 10 secondi, aggiungi le serie che vuoi guardare
-            e lascia che StreamPlanner faccia il resto.
+            Crea il tuo account in 10 secondi, aggiungi le serie, segna le stagioni gia viste
+            e lascia che StreamPlanner pianifichi tutto per te.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
