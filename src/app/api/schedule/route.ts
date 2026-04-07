@@ -17,7 +17,6 @@ function localDateStr(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-/** Get month index (months since epoch) for a date — used for month-based windowing */
 function monthIndex(date: Date): number {
   return date.getFullYear() * 12 + date.getMonth();
 }
@@ -39,7 +38,7 @@ interface ScheduleEntry {
   watchedSoFar: number;
 }
 
-interface SeriesQueueItem {
+interface SeriesItem {
   seriesName: string;
   seriesTmdbId: number;
   posterPath: string | null;
@@ -54,10 +53,10 @@ interface SeriesQueueItem {
   platformSlug: string | null;
   platformName: string | null;
   platformColor: string | null;
-  // Month window: series is only schedulable during these months
-  // null = always available (active sub, free, always-on)
+  isAlwaysAvailable: boolean;
+  // For rotation series: which month window
   activeFromMonth: number | null;
-  activeUntilMonth: number | null; // inclusive
+  activeUntilMonth: number | null;
 }
 
 export async function GET() {
@@ -110,9 +109,8 @@ export async function GET() {
     const allPlatforms = await db.select().from(platforms);
     const platformById = new Map(allPlatforms.map((p) => [p.id, p]));
 
-    // 4. Build series list with platform info
-    type SeriesWithPlatform = SeriesQueueItem & { platformPrice: number; isAlwaysAvailable: boolean };
-    const allSeries: SeriesWithPlatform[] = [];
+    // 4. Build series list
+    const allSeries: SeriesItem[] = [];
 
     for (const item of items) {
       const runtime = item.series.episodeRunTime || DEFAULT_EPISODE_RUNTIME;
@@ -134,8 +132,6 @@ export async function GET() {
       const freePlatform = seriesPlatformInfos.find((p) => p && p.isFree);
       const alwaysOn = seriesPlatformInfos.find((p) => p && alwaysOnSlugs.includes(p.slug));
       const bestPaid = seriesPlatformInfos.find((p) => p && !p.isFree && !activeSubSlugs.includes(p.slug) && !alwaysOnSlugs.includes(p.slug));
-
-      // Prefer: active sub > free > always-on > paid rotation
       const bestPlatform = activeSub || freePlatform || alwaysOn || bestPaid || null;
       const isAlwaysAvailable = !!(activeSub || freePlatform || alwaysOn);
 
@@ -146,34 +142,30 @@ export async function GET() {
         watchlistId: item.watchlist.id,
         priority: item.watchlist.priority,
         status: item.watchlist.status!,
-        runtime,
-        totalEpisodes,
-        watchedEpisodes: watched,
-        remainingEpisodes,
+        runtime, totalEpisodes, watchedEpisodes: watched, remainingEpisodes,
         scheduledEpisodes: 0,
         platformSlug: bestPlatform?.slug || null,
         platformName: bestPlatform?.name || null,
         platformColor: bestPlatform?.color || null,
-        platformPrice: bestPlatform?.monthlyPrice || 0,
         isAlwaysAvailable,
         activeFromMonth: null,
         activeUntilMonth: null,
       });
     }
 
-    // 5. Compute rotation windows for paid-platform series
+    // 5. Compute rotation windows for paid platforms
+    // These define WHEN to subscribe, but series on active subs run in parallel
     const now = new Date();
     const currentMonthIdx = monthIndex(now);
 
-    // Group rotation series by platform
-    const rotationByPlatform = new Map<string, SeriesWithPlatform[]>();
+    const rotationByPlatform = new Map<string, SeriesItem[]>();
     for (const s of allSeries) {
       if (s.isAlwaysAvailable || !s.platformSlug) continue;
       if (!rotationByPlatform.has(s.platformSlug)) rotationByPlatform.set(s.platformSlug, []);
       rotationByPlatform.get(s.platformSlug)!.push(s);
     }
 
-    // Sort platforms by priority (highest priority series first, then most hours)
+    // Sort platforms: watching first, then highest priority, then most hours
     const platformRotationOrder = [...rotationByPlatform.entries()]
       .map(([slug, seriesList]) => {
         const totalHours = seriesList.reduce((sum, s) => sum + (s.remainingEpisodes * s.runtime) / 60, 0);
@@ -185,16 +177,13 @@ export async function GET() {
         return { slug, seriesList, totalHours, monthsNeeded, maxPriority, hasWatching };
       })
       .sort((a, b) => {
-        // Watching series first
         if (a.hasWatching && !b.hasWatching) return -1;
         if (!a.hasWatching && b.hasWatching) return 1;
-        // Then by priority
         if (a.maxPriority !== b.maxPriority) return b.maxPriority - a.maxPriority;
-        // Then by hours (more content first)
         return b.totalHours - a.totalHours;
       });
 
-    // Assign month windows sequentially
+    // Assign month windows sequentially starting from current month
     let nextMonthStart = currentMonthIdx;
     for (const { seriesList, monthsNeeded } of platformRotationOrder) {
       const fromMonth = nextMonthStart;
@@ -206,49 +195,33 @@ export async function GET() {
       nextMonthStart = untilMonth + 1;
     }
 
-    // 6. Build final queue (sorted)
-    const queue: SeriesQueueItem[] = allSeries.map((s) => ({
-      seriesName: s.seriesName,
-      seriesTmdbId: s.seriesTmdbId,
-      posterPath: s.posterPath,
-      watchlistId: s.watchlistId,
-      priority: s.priority,
-      status: s.status,
-      runtime: s.runtime,
-      totalEpisodes: s.totalEpisodes,
-      watchedEpisodes: s.watchedEpisodes,
-      remainingEpisodes: s.remainingEpisodes,
-      scheduledEpisodes: 0,
-      platformSlug: s.platformSlug,
-      platformName: s.platformName,
-      platformColor: s.platformColor,
-      activeFromMonth: s.activeFromMonth,
-      activeUntilMonth: s.activeUntilMonth,
-    }));
+    // 6. Build daily schedule
+    // KEY DESIGN: Active-sub series and rotation series run IN PARALLEL.
+    // Each day's viewing time is split between:
+    //   - Rotation series (scheduled during their platform window)
+    //   - Always-available series (fill remaining time)
+    // This ensures rotation platforms are used efficiently while
+    // active-sub content doesn't block rotation series.
 
-    queue.sort((a, b) => {
-      // Always-available first (activeFromMonth === null)
-      if (a.activeFromMonth === null && b.activeFromMonth !== null) return -1;
-      if (a.activeFromMonth !== null && b.activeFromMonth === null) return 1;
-      // Then by active window start (earlier first)
-      if (a.activeFromMonth !== null && b.activeFromMonth !== null) {
-        if (a.activeFromMonth !== b.activeFromMonth) return a.activeFromMonth - b.activeFromMonth;
-      }
-      // Then watching first
+    const rotationSeries = allSeries.filter((s) => !s.isAlwaysAvailable && s.activeFromMonth !== null);
+    const alwaysAvailSeries = allSeries.filter((s) => s.isAlwaysAvailable || (s.activeFromMonth === null && s.platformSlug === null));
+
+    // Sort each group by priority
+    const sortByPriority = (a: SeriesItem, b: SeriesItem) => {
       const statusOrder = { watching: 0, to_watch: 1 };
       const sa = statusOrder[a.status as keyof typeof statusOrder] ?? 1;
       const sb = statusOrder[b.status as keyof typeof statusOrder] ?? 1;
       if (sa !== sb) return sa - sb;
-      // Then by priority
       const prioOrder = { high: 0, medium: 1, low: 2 };
       return (prioOrder[a.priority as keyof typeof prioOrder] ?? 1) - (prioOrder[b.priority as keyof typeof prioOrder] ?? 1);
-    });
+    };
 
-    // Stats
-    const totalRemainingEpisodes = queue.reduce((s, q) => s + q.remainingEpisodes, 0);
-    const totalRemainingMinutes = queue.reduce((s, q) => s + q.remainingEpisodes * q.runtime, 0);
+    rotationSeries.sort(sortByPriority);
+    alwaysAvailSeries.sort(sortByPriority);
 
-    // 7. Generate daily schedule respecting platform windows
+    const totalRemainingEpisodes = allSeries.reduce((s, q) => s + q.remainingEpisodes, 0);
+    const totalRemainingMinutes = allSeries.reduce((s, q) => s + q.remainingEpisodes * q.runtime, 0);
+
     const schedule: Record<string, ScheduleEntry[]> = {};
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -258,7 +231,7 @@ export async function GET() {
     let daysUsed = 0;
 
     for (let d = 0; d < SCHEDULE_DAYS; d++) {
-      const allDone = queue.every((s) => s.scheduledEpisodes >= s.remainingEpisodes);
+      const allDone = allSeries.every((s) => s.scheduledEpisodes >= s.remainingEpisodes);
       if (allDone) break;
 
       const date = new Date(today);
@@ -273,47 +246,55 @@ export async function GET() {
       const dateStr = localDateStr(date);
       const dayEntries: ScheduleEntry[] = [];
 
-      for (const item of queue) {
-        if (availableMinutes < item.runtime * 0.5) break;
-        const remaining = item.remainingEpisodes - item.scheduledEpisodes;
-        if (remaining <= 0) continue;
+      const scheduleFromList = (list: SeriesItem[], minutesLeft: number): number => {
+        for (const item of list) {
+          if (minutesLeft < item.runtime * 0.5) break;
+          const remaining = item.remainingEpisodes - item.scheduledEpisodes;
+          if (remaining <= 0) continue;
 
-        // Check platform window: skip if this month is outside the active window
-        if (item.activeFromMonth !== null && item.activeUntilMonth !== null) {
-          if (dateMonthIdx < item.activeFromMonth || dateMonthIdx > item.activeUntilMonth) {
-            continue;
+          // Check rotation window
+          if (item.activeFromMonth !== null && item.activeUntilMonth !== null) {
+            if (dateMonthIdx < item.activeFromMonth || dateMonthIdx > item.activeUntilMonth) {
+              continue;
+            }
           }
+
+          const maxEpisodes = Math.floor(minutesLeft / item.runtime);
+          if (maxEpisodes <= 0) continue;
+          const episodesToSchedule = Math.min(maxEpisodes, remaining);
+          const episodeFrom = item.watchedEpisodes + item.scheduledEpisodes + 1;
+          const episodeTo = item.watchedEpisodes + item.scheduledEpisodes + episodesToSchedule;
+          const minutesUsed = episodesToSchedule * item.runtime;
+
+          dayEntries.push({
+            seriesName: item.seriesName,
+            seriesTmdbId: item.seriesTmdbId,
+            posterPath: item.posterPath,
+            watchlistId: item.watchlistId,
+            episodes: episodesToSchedule,
+            episodeFrom, episodeTo,
+            minutes: minutesUsed,
+            priority: item.priority,
+            status: item.status,
+            platformName: item.platformName || undefined,
+            platformColor: item.platformColor || undefined,
+            totalEpisodes: item.totalEpisodes,
+            watchedSoFar: item.watchedEpisodes + item.scheduledEpisodes,
+          });
+
+          item.scheduledEpisodes += episodesToSchedule;
+          minutesLeft -= minutesUsed;
+          totalScheduledEpisodes += episodesToSchedule;
+          totalScheduledMinutes += minutesUsed;
         }
+        return minutesLeft;
+      };
 
-        const maxEpisodes = Math.floor(availableMinutes / item.runtime);
-        if (maxEpisodes <= 0) continue;
-        const episodesToSchedule = Math.min(maxEpisodes, remaining);
-        const episodeFrom = item.watchedEpisodes + item.scheduledEpisodes + 1;
-        const episodeTo = item.watchedEpisodes + item.scheduledEpisodes + episodesToSchedule;
-        const minutesUsed = episodesToSchedule * item.runtime;
+      // ROTATION SERIES FIRST — they have a limited time window
+      availableMinutes = scheduleFromList(rotationSeries, availableMinutes);
 
-        dayEntries.push({
-          seriesName: item.seriesName,
-          seriesTmdbId: item.seriesTmdbId,
-          posterPath: item.posterPath,
-          watchlistId: item.watchlistId,
-          episodes: episodesToSchedule,
-          episodeFrom,
-          episodeTo,
-          minutes: minutesUsed,
-          priority: item.priority,
-          status: item.status,
-          platformName: item.platformName || undefined,
-          platformColor: item.platformColor || undefined,
-          totalEpisodes: item.totalEpisodes,
-          watchedSoFar: item.watchedEpisodes + item.scheduledEpisodes,
-        });
-
-        item.scheduledEpisodes += episodesToSchedule;
-        availableMinutes -= minutesUsed;
-        totalScheduledEpisodes += episodesToSchedule;
-        totalScheduledMinutes += minutesUsed;
-      }
+      // THEN ALWAYS-AVAILABLE — fill remaining time with active sub / free content
+      availableMinutes = scheduleFromList(alwaysAvailSeries, availableMinutes);
 
       if (dayEntries.length > 0) {
         schedule[dateStr] = dayEntries;
@@ -321,7 +302,7 @@ export async function GET() {
       }
     }
 
-    const allScheduled = queue.every((s) => s.scheduledEpisodes >= s.remainingEpisodes);
+    const allScheduled = allSeries.every((s) => s.scheduledEpisodes >= s.remainingEpisodes);
 
     return NextResponse.json({
       schedule,
@@ -331,7 +312,7 @@ export async function GET() {
         scheduledEpisodes: totalScheduledEpisodes,
         scheduledHours: Math.round(totalScheduledMinutes / 60 * 10) / 10,
         daysNeeded: daysUsed,
-        seriesCount: queue.length,
+        seriesCount: allSeries.length,
         weeklyHours,
         allScheduled,
       },
