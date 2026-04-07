@@ -30,7 +30,6 @@ export async function PATCH(
 
     // Auto-status management based on watchedEpisodes
     if (body.watchedEpisodes !== undefined && !body.status) {
-      // Get series info to check total episodes
       const [item] = await db
         .select({ seriesId: watchlist.seriesId, status: watchlist.status })
         .from(watchlist)
@@ -43,12 +42,20 @@ export async function PATCH(
           .where(eq(series.id, item.seriesId));
 
         const totalEpisodes = seriesData?.numberOfEpisodes || 0;
+        const watched = body.watchedEpisodes;
 
-        if (body.watchedEpisodes > 0 && item.status === "to_watch") {
-          updates.status = "watching";
-        }
-        if (totalEpisodes > 0 && body.watchedEpisodes >= totalEpisodes) {
+        if (watched === 0) {
+          // Reset to to_watch if cleared
+          updates.status = "to_watch";
+        } else if (totalEpisodes > 0 && watched >= totalEpisodes) {
+          // All episodes watched → completed
           updates.status = "completed";
+        } else if (watched > 0) {
+          // Some episodes watched but not all → watching
+          // This also fixes: completed→watching when user reduces count
+          if (item.status === "to_watch" || item.status === "completed") {
+            updates.status = "watching";
+          }
         }
       }
     }

@@ -177,9 +177,12 @@ export async function GET() {
         return { slug, seriesList, totalHours, monthsNeeded, maxPriority, hasWatching };
       })
       .sort((a, b) => {
+        // Priority is king — user's explicit choice
+        if (a.maxPriority !== b.maxPriority) return b.maxPriority - a.maxPriority;
+        // Within same priority, watching series get preference
         if (a.hasWatching && !b.hasWatching) return -1;
         if (!a.hasWatching && b.hasWatching) return 1;
-        if (a.maxPriority !== b.maxPriority) return b.maxPriority - a.maxPriority;
+        // Then more content first (use platform efficiently)
         return b.totalHours - a.totalHours;
       });
 
