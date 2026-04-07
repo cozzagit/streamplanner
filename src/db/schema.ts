@@ -130,6 +130,7 @@ export const watchlist = pgTable(
     priority: priorityEnum("priority").notNull().default("medium"),
     currentSeason: integer("current_season"),
     currentEpisode: integer("current_episode"),
+    watchedEpisodes: integer("watched_episodes").notNull().default(0),
     notes: text("notes"),
     addedAt: timestamp("added_at", { withTimezone: true })
       .notNull()

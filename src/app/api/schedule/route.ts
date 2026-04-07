@@ -15,6 +15,7 @@ interface ScheduleEntry {
   seriesName: string;
   seriesTmdbId: number;
   posterPath: string | null;
+  watchlistId: string;
   episodes: number;
   episodeFrom: number;
   episodeTo: number;
@@ -23,24 +24,25 @@ interface ScheduleEntry {
   status: string;
   platformName?: string;
   platformColor?: string;
+  totalEpisodes: number;
+  watchedSoFar: number; // watched before this block
 }
 
 interface SeriesQueueItem {
   seriesName: string;
   seriesTmdbId: number;
   posterPath: string | null;
+  watchlistId: string;
   priority: string;
   status: string;
   runtime: number;
+  totalEpisodes: number;
+  watchedEpisodes: number;
   remainingEpisodes: number;
   scheduledEpisodes: number;
   platformSlug: string | null;
   platformName: string | null;
   platformColor: string | null;
-  // Which months this series is available (based on rotation plan)
-  // null means always available (active sub, free, always-on)
-  availableFrom: Date | null;
-  availableUntil: Date | null;
 }
 
 export async function GET() {
@@ -101,42 +103,22 @@ export async function GET() {
       });
     }
 
-    // Fetch rotation plan to know when platforms are active
-    const rotationRes = await fetch(
-      `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/api/rotation?months=12`,
-      { headers: { cookie: "" } } // won't work server-side, so we fetch rotation data directly
-    ).catch(() => null);
-
-    // Instead of HTTP call, compute rotation availability directly
-    // by re-fetching the rotation data inline (simpler and avoids auth issues)
-    // We'll compute platform windows from rotation plans
-
     // Get all platforms
     const allPlatforms = await db.select().from(platforms);
     const platformById = new Map(allPlatforms.map((p) => [p.id, p]));
-    const platformBySlug = new Map(allPlatforms.map((p) => [p.slug, p]));
 
     // Build the queue with platform info
     const queue: SeriesQueueItem[] = [];
 
-    // Calculate monthly viewing capacity
-    const monthlyViewingHours = weeklyHours * 4.33;
-
-    // For each series, determine its platform and when it's available
     for (const item of items) {
       const runtime = item.series.episodeRunTime || DEFAULT_EPISODE_RUNTIME;
       const totalEpisodes = item.series.numberOfEpisodes || 1;
 
-      let watchedEpisodes = 0;
-      if (item.watchlist.status === "watching" && item.watchlist.currentSeason && item.watchlist.currentEpisode) {
-        const avgEpPerSeason = Math.ceil(totalEpisodes / (item.series.numberOfSeasons || 1));
-        watchedEpisodes = Math.min(
-          totalEpisodes - 1,
-          (item.watchlist.currentSeason - 1) * avgEpPerSeason + item.watchlist.currentEpisode
-        );
-      }
+      // Use watchedEpisodes from DB (accurate progress tracking)
+      const watched = item.watchlist.watchedEpisodes || 0;
+      const remainingEpisodes = Math.max(0, totalEpisodes - watched);
 
-      const remainingEpisodes = Math.max(1, totalEpisodes - watchedEpisodes);
+      if (remainingEpisodes === 0) continue; // fully watched, skip
 
       // Get platforms for this series
       const platformLinks = await db
@@ -148,28 +130,26 @@ export async function GET() {
         .map((pl) => platformById.get(pl.platformId))
         .filter((p) => p && !excludedSlugs.includes(p.slug));
 
-      // Determine best platform and availability
       const activeSub = seriesPlatformInfos.find((p) => p && activeSubSlugs.includes(p.slug));
       const freePlatform = seriesPlatformInfos.find((p) => p && p.isFree);
       const alwaysOn = seriesPlatformInfos.find((p) => p && alwaysOnSlugs.includes(p.slug));
-
-      let bestPlatform = activeSub || freePlatform || alwaysOn || seriesPlatformInfos[0] || null;
+      const bestPlatform = activeSub || freePlatform || alwaysOn || seriesPlatformInfos[0] || null;
 
       queue.push({
         seriesName: item.series.name,
         seriesTmdbId: item.series.tmdbId,
         posterPath: item.series.posterPath,
+        watchlistId: item.watchlist.id,
         priority: item.watchlist.priority,
         status: item.watchlist.status!,
         runtime,
+        totalEpisodes,
+        watchedEpisodes: watched,
         remainingEpisodes,
         scheduledEpisodes: 0,
         platformSlug: bestPlatform?.slug || null,
         platformName: bestPlatform?.name || null,
         platformColor: bestPlatform?.color || null,
-        // Active subs, free, always-on = always available
-        availableFrom: (activeSub || freePlatform || alwaysOn) ? null : null,
-        availableUntil: null,
       });
     }
 
@@ -222,14 +202,16 @@ export async function GET() {
         const maxEpisodes = Math.floor(availableMinutes / item.runtime);
         if (maxEpisodes <= 0) continue;
         const episodesToSchedule = Math.min(maxEpisodes, remaining);
-        const episodeFrom = item.scheduledEpisodes + 1;
-        const episodeTo = item.scheduledEpisodes + episodesToSchedule;
+        // Episode numbers are relative to remaining (watched + offset)
+        const episodeFrom = item.watchedEpisodes + item.scheduledEpisodes + 1;
+        const episodeTo = item.watchedEpisodes + item.scheduledEpisodes + episodesToSchedule;
         const minutesUsed = episodesToSchedule * item.runtime;
 
         dayEntries.push({
           seriesName: item.seriesName,
           seriesTmdbId: item.seriesTmdbId,
           posterPath: item.posterPath,
+          watchlistId: item.watchlistId,
           episodes: episodesToSchedule,
           episodeFrom,
           episodeTo,
@@ -238,6 +220,8 @@ export async function GET() {
           status: item.status,
           platformName: item.platformName || undefined,
           platformColor: item.platformColor || undefined,
+          totalEpisodes: item.totalEpisodes,
+          watchedSoFar: item.watchedEpisodes + item.scheduledEpisodes,
         });
 
         item.scheduledEpisodes += episodesToSchedule;

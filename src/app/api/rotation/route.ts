@@ -123,16 +123,9 @@ export async function GET(req: NextRequest) {
       const runtime = item.series.episodeRunTime || DEFAULT_EPISODE_RUNTIME;
       const totalEpisodes = item.series.numberOfEpisodes || 1;
 
-      let watchedEpisodes = 0;
-      if (item.watchlist.status === "watching" && item.watchlist.currentSeason && item.watchlist.currentEpisode) {
-        const avgEpPerSeason = Math.ceil(totalEpisodes / (item.series.numberOfSeasons || 1));
-        watchedEpisodes = Math.min(
-          totalEpisodes - 1,
-          (item.watchlist.currentSeason - 1) * avgEpPerSeason + item.watchlist.currentEpisode
-        );
-      }
-
-      const remainingEpisodes = Math.max(1, totalEpisodes - watchedEpisodes);
+      const watched = item.watchlist.watchedEpisodes || 0;
+      const remainingEpisodes = Math.max(0, totalEpisodes - watched);
+      if (remainingEpisodes === 0) continue; // fully watched
       const totalMinutes = remainingEpisodes * runtime;
 
       // Get platforms for this series

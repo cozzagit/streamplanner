@@ -14,6 +14,8 @@ import {
   Clock,
   Timer,
   Zap,
+  CheckCircle,
+  Circle,
 } from "lucide-react";
 import { imageUrl } from "@/lib/tmdb";
 
@@ -43,6 +45,7 @@ interface ScheduleEntry {
   seriesName: string;
   seriesTmdbId: number;
   posterPath: string | null;
+  watchlistId: string;
   episodes: number;
   episodeFrom: number;
   episodeTo: number;
@@ -51,6 +54,8 @@ interface ScheduleEntry {
   status: string;
   platformName?: string;
   platformColor?: string;
+  totalEpisodes: number;
+  watchedSoFar: number;
 }
 
 interface ScheduleData {
@@ -120,14 +125,37 @@ function ScheduleView() {
   const [data, setData] = useState<ScheduleData | null>(null);
   const [loading, setLoading] = useState(true);
   const [weekOffset, setWeekOffset] = useState(0);
+  const [marking, setMarking] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchSchedule = () => {
     fetch("/api/schedule")
       .then((r) => r.json())
       .then((d) => setData(d))
       .catch(() => setData(null))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchSchedule();
   }, []);
+
+  const markWatched = async (entry: ScheduleEntry) => {
+    const key = `${entry.watchlistId}-${entry.episodeTo}`;
+    setMarking(key);
+    try {
+      await fetch(`/api/watchlist/${entry.watchlistId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          watchedEpisodes: entry.episodeTo, // mark up to this episode as watched
+        }),
+      });
+      // Refetch schedule — it will recalculate from new progress
+      fetchSchedule();
+    } finally {
+      setMarking(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -351,36 +379,72 @@ function ScheduleView() {
                     const borderColor =
                       priorityColors[entry.priority as keyof typeof priorityColors] ||
                       "border-l-border";
+                    const markKey = `${entry.watchlistId}-${entry.episodeTo}`;
+                    const isMarking = marking === markKey;
+                    const progressPct = entry.totalEpisodes > 0
+                      ? Math.round((entry.watchedSoFar / entry.totalEpisodes) * 100)
+                      : 0;
 
                     return (
-                      <Link
+                      <div
                         key={`${entry.seriesTmdbId}-${i}`}
-                        href={`/serie/${entry.seriesTmdbId}`}
-                        className={`flex items-center gap-3 p-2.5 rounded-lg bg-bg-secondary/50 border-l-[3px] ${borderColor} hover:bg-bg-secondary transition-colors`}
+                        className={`flex items-center gap-2.5 p-2.5 rounded-lg bg-bg-secondary/50 border-l-[3px] ${borderColor} transition-colors`}
                       >
-                        <div className="w-9 h-13 rounded overflow-hidden relative flex-shrink-0">
-                          <Image
-                            src={imageUrl(entry.posterPath, "w92")}
-                            alt={entry.seriesName}
-                            fill
-                            className="object-cover"
-                            sizes="36px"
-                          />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-text-primary truncate">
-                            {entry.seriesName}
-                          </p>
-                          <p className="text-xs text-text-secondary">
-                            {entry.episodes === 1
-                              ? `Ep. ${entry.episodeFrom}`
-                              : `Ep. ${entry.episodeFrom}–${entry.episodeTo}`}
-                            <span className="mx-1">&middot;</span>
-                            {entry.minutes >= 60
-                              ? `${Math.floor(entry.minutes / 60)}h ${entry.minutes % 60 > 0 ? `${entry.minutes % 60}m` : ""}`
-                              : `${entry.minutes}m`}
-                          </p>
-                        </div>
+                        {/* Mark as watched button */}
+                        <button
+                          onClick={() => markWatched(entry)}
+                          disabled={isMarking}
+                          className="flex-shrink-0 p-0.5 rounded-full text-text-secondary/40 hover:text-success transition-colors disabled:opacity-50"
+                          title={`Segna ep. ${entry.episodeFrom}${entry.episodes > 1 ? `–${entry.episodeTo}` : ""} come visti`}
+                        >
+                          {isMarking ? (
+                            <Loader2 size={18} className="animate-spin text-accent" />
+                          ) : (
+                            <Circle size={18} />
+                          )}
+                        </button>
+
+                        <Link
+                          href={`/serie/${entry.seriesTmdbId}`}
+                          className="flex items-center gap-2.5 flex-1 min-w-0 hover:opacity-80 transition-opacity"
+                        >
+                          <div className="w-9 h-13 rounded overflow-hidden relative flex-shrink-0">
+                            <Image
+                              src={imageUrl(entry.posterPath, "w92")}
+                              alt={entry.seriesName}
+                              fill
+                              className="object-cover"
+                              sizes="36px"
+                            />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-text-primary truncate">
+                              {entry.seriesName}
+                            </p>
+                            <p className="text-xs text-text-secondary">
+                              {entry.episodes === 1
+                                ? `Ep. ${entry.episodeFrom}`
+                                : `Ep. ${entry.episodeFrom}–${entry.episodeTo}`}
+                              <span className="mx-1">&middot;</span>
+                              {entry.minutes >= 60
+                                ? `${Math.floor(entry.minutes / 60)}h ${entry.minutes % 60 > 0 ? `${entry.minutes % 60}m` : ""}`
+                                : `${entry.minutes}m`}
+                            </p>
+                            {/* Progress bar */}
+                            <div className="flex items-center gap-2 mt-1">
+                              <div className="flex-1 h-1 bg-bg-secondary rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-accent/60 rounded-full transition-all"
+                                  style={{ width: `${progressPct}%` }}
+                                />
+                              </div>
+                              <span className="text-[10px] text-text-secondary/50 tabular-nums">
+                                {entry.watchedSoFar}/{entry.totalEpisodes}
+                              </span>
+                            </div>
+                          </div>
+                        </Link>
+
                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
                           <span className="text-xs font-medium text-accent-light tabular-nums">
                             {entry.episodes} ep
@@ -397,7 +461,7 @@ function ScheduleView() {
                             </span>
                           )}
                         </div>
-                      </Link>
+                      </div>
                     );
                   })}
                 </div>
