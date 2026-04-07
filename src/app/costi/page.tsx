@@ -11,42 +11,63 @@ import {
   Settings,
   AlertTriangle,
   ChevronRight,
+  Clock,
+  CheckCircle,
 } from "lucide-react";
 import { getPaidPlatforms, getFreePlatforms } from "@/lib/platforms";
 
-interface RotationSummary {
+interface ActiveSubEntry {
+  name: string;
+  slug: string;
+  color: string;
+  monthlyPrice: number;
+  seriesCovered: number;
+  totalHours: number;
+  coveredSeries: { name: string; hours: number }[];
+}
+
+interface PlanMonth {
+  mainPlatform: {
+    name: string;
+    slug: string;
+    color: string;
+    monthlyPrice: number;
+    coveredSeries: { name: string; hours?: number; episodes?: number }[];
+  };
+  estimatedCost: number;
+  totalHoursOnPlatform: number;
+  monthsForPlatform: number;
+  currentMonthOfPlatform: number;
+}
+
+interface RotationData {
+  plans: PlanMonth[];
+  activeSubscriptions?: ActiveSubEntry[];
   summary: {
     monthlyBudget: number;
+    weeklyHours: number;
+    monthlyViewingHours: number;
     alwaysOnCost?: number;
     activeSubsCost?: number;
     totalPlatformsCost: number;
     rotationMonthlyCost: number;
     monthlySavings: number;
     watchlistTotal: number;
+    totalViewingHours: number;
     platformsNeeded: number;
+    monthsInPlan: number;
     alwaysOnPlatforms?: string[];
     activeSubscriptions?: string[];
   };
-  scoredPlatforms: {
-    name: string;
-    slug: string;
-    color: string;
-    monthlyPrice: number;
-    isFree: boolean;
-    isActiveSub?: boolean;
-    seriesAvailable: { name: string }[];
-    score: number;
-    costPerSeries: number;
-  }[];
   message?: string;
 }
 
 export default function CostiPage() {
-  const [data, setData] = useState<RotationSummary | null>(null);
+  const [data, setData] = useState<RotationData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/rotation?months=6")
+    fetch(`/api/rotation?months=12&_t=${Date.now()}`)
       .then((r) => r.json())
       .then(setData)
       .catch(() => setData(null))
@@ -55,10 +76,6 @@ export default function CostiPage() {
 
   const paidPlatforms = getPaidPlatforms();
   const freePlatforms = getFreePlatforms();
-  const allPaidTotal = paidPlatforms.reduce(
-    (sum, p) => sum + p.monthlyPrice,
-    0
-  );
 
   if (loading) {
     return (
@@ -68,8 +85,7 @@ export default function CostiPage() {
     );
   }
 
-  // Empty state when no watchlist data
-  if (data?.message || !data?.scoredPlatforms?.length) {
+  if (data?.message || !data?.summary) {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-text-primary flex items-center gap-2">
@@ -79,7 +95,7 @@ export default function CostiPage() {
         <div className="text-center py-16 bg-bg-card rounded-xl border border-border">
           <Wallet size={48} className="mx-auto text-text-secondary/30 mb-4" />
           <p className="text-text-secondary text-lg">
-            Aggiungi serie alla watchlist per vedere l&apos;analisi dei costi
+            {data?.message || "Aggiungi serie alla watchlist per vedere l'analisi dei costi"}
           </p>
           <Link
             href="/cerca"
@@ -88,41 +104,44 @@ export default function CostiPage() {
             Cerca Serie <ChevronRight size={16} />
           </Link>
         </div>
-
-        {/* Still show platform prices even with empty watchlist */}
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-text-primary">
-            Listino Piattaforme
-          </h2>
-          <div className="space-y-3">
-            {paidPlatforms.map((p) => (
-              <div
-                key={p.slug}
-                className="flex items-center gap-4 p-4 rounded-xl bg-bg-card border border-border"
-              >
-                <div
-                  className="w-10 h-10 rounded-lg flex items-center justify-center text-white text-lg"
-                  style={{ backgroundColor: p.color }}
-                >
-                  {p.icon}
-                </div>
-                <div className="flex-1">
-                  <p className="font-medium text-text-primary">{p.name}</p>
-                </div>
-                <p className="font-bold text-text-primary">
-                  &euro;{p.monthlyPrice.toFixed(2)}/mese
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
     );
   }
 
-  const summary = data.summary;
-  const scored = data.scoredPlatforms;
+  const { summary, plans, activeSubscriptions } = data;
   const overBudget = summary.monthlyBudget > 0 && summary.rotationMonthlyCost > summary.monthlyBudget;
+
+  // Active subs cost (user already pays this)
+  const activeSubsCost = summary.activeSubsCost || 0;
+
+  // Total cost if user subscribed to ALL platforms needed (rotation + active)
+  const allNeededCost = summary.totalPlatformsCost + activeSubsCost;
+
+  // With rotation: active subs (fixed) + rotation average
+  const withRotationCost = activeSubsCost + summary.rotationMonthlyCost;
+
+  // Savings = difference
+  const savings = allNeededCost - withRotationCost;
+
+  // Build platform usage map from plans (deduplicate multi-month)
+  const platformUsage = new Map<string, {
+    name: string; slug: string; color: string; monthlyPrice: number;
+    months: number; totalHours: number; series: string[];
+  }>();
+  for (const plan of plans) {
+    const mp = plan.mainPlatform;
+    if (!platformUsage.has(mp.slug)) {
+      platformUsage.set(mp.slug, {
+        name: mp.name, slug: mp.slug, color: mp.color, monthlyPrice: mp.monthlyPrice,
+        months: 0, totalHours: plan.totalHoursOnPlatform,
+        series: mp.coveredSeries.map((s) => s.name),
+      });
+    }
+    if (plan.currentMonthOfPlatform === 1 || !platformUsage.get(mp.slug)!.series.length) {
+      platformUsage.get(mp.slug)!.series = mp.coveredSeries.map((s) => s.name);
+    }
+    platformUsage.get(mp.slug)!.months++;
+  }
 
   return (
     <div className="space-y-6">
@@ -140,19 +159,16 @@ export default function CostiPage() {
         </Link>
       </div>
 
-      {/* Budget warning */}
       {overBudget && (
         <div className="flex items-start gap-3 p-4 rounded-xl bg-danger/10 border border-danger/30">
           <AlertTriangle size={18} className="text-danger flex-shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-medium text-danger">
-              Il costo medio con rotazione (&euro;{summary.rotationMonthlyCost.toFixed(2)}) supera il tuo budget (&euro;{summary.monthlyBudget.toFixed(2)})
+              Il costo rotazione (&euro;{summary.rotationMonthlyCost.toFixed(2)}) supera il budget (&euro;{summary.monthlyBudget.toFixed(2)})
             </p>
             <p className="text-xs text-text-secondary mt-1">
-              Prova a ridurre le serie in watchlist o ad aumentare il budget nelle{" "}
-              <Link href="/impostazioni" className="text-accent-light underline">
-                impostazioni
-              </Link>
+              Riduci le serie o aumenta il budget nelle{" "}
+              <Link href="/impostazioni" className="text-accent-light underline">impostazioni</Link>
             </p>
           </div>
         </div>
@@ -163,138 +179,124 @@ export default function CostiPage() {
         <div className="p-6 rounded-xl bg-danger/10 border border-danger/30">
           <div className="flex items-center gap-2 text-danger text-sm mb-2">
             <Wallet size={16} />
-            Se avessi TUTTO attivo
+            Tutte le piattaforme necessarie
           </div>
           <p className="text-3xl font-bold text-danger">
-            &euro;{allPaidTotal.toFixed(2)}/mese
+            &euro;{allNeededCost.toFixed(2)}/mese
           </p>
           <p className="text-xs text-text-secondary mt-1">
-            {paidPlatforms.length} piattaforme a pagamento
+            {summary.platformsNeeded} in rotazione + {activeSubscriptions?.length || 0} abbonamenti attivi
           </p>
         </div>
 
         <div className="p-6 rounded-xl bg-accent/10 border border-accent/30">
           <div className="flex items-center gap-2 text-accent-light text-sm mb-2">
             <PieChart size={16} />
-            Con Rotation Planner
+            Con rotazione
           </div>
           <p className="text-3xl font-bold text-accent-light">
-            &euro;{summary.rotationMonthlyCost.toFixed(2)}/mese
+            &euro;{withRotationCost.toFixed(2)}/mese
           </p>
           <p className="text-xs text-text-secondary mt-1">
-            Media mensile con rotazione
-            {summary.alwaysOnCost != null && summary.alwaysOnCost > 0 && (
-              <span> (incl. &euro;{summary.alwaysOnCost.toFixed(2)} sempre attive)</span>
-            )}
+            &euro;{activeSubsCost.toFixed(2)} abbonamenti + &euro;{summary.rotationMonthlyCost.toFixed(2)} rotazione media
           </p>
         </div>
 
         <div className="p-6 rounded-xl bg-success/10 border border-success/30">
           <div className="flex items-center gap-2 text-success text-sm mb-2">
             <TrendingDown size={16} />
-            Risparmio
+            Risparmio mensile
           </div>
           <p className="text-3xl font-bold text-success">
-            &euro;{summary.monthlySavings.toFixed(2)}/mese
+            &euro;{savings.toFixed(2)}/mese
           </p>
           <p className="text-xs text-text-secondary mt-1">
-            {summary.totalPlatformsCost > 0
-              ? `${((summary.monthlySavings / summary.totalPlatformsCost) * 100).toFixed(0)}% in meno`
-              : "Nessun costo da confrontare"}
+            {allNeededCost > 0
+              ? `${Math.round((savings / allNeededCost) * 100)}% in meno`
+              : "Nessun costo extra"}
           </p>
         </div>
       </div>
 
-      {/* Platform breakdown */}
-      <div className="space-y-4">
-        <h2 className="text-lg font-semibold text-text-primary">
-          Piattaforme a Pagamento
-        </h2>
+      {/* Active subscriptions */}
+      {activeSubscriptions && activeSubscriptions.length > 0 && (
         <div className="space-y-3">
-          {paidPlatforms.map((p) => {
-            const scored_p = scored.find((s) => s.slug === p.slug);
-            const seriesCount = scored_p?.seriesAvailable.length || 0;
-            const costPerSeries = scored_p?.costPerSeries;
-            const isAlwaysOn = summary.alwaysOnPlatforms?.includes(p.slug);
-            const isActiveSub = summary.activeSubscriptions?.includes(p.slug);
-
-            return (
-              <div
-                key={p.slug}
-                className={`flex items-center gap-4 p-4 rounded-xl bg-bg-card border ${
-                  isActiveSub ? "border-success/40" : isAlwaysOn ? "border-accent/40" : "border-border"
-                }`}
-              >
+          <h2 className="text-lg font-semibold text-text-primary flex items-center gap-2">
+            <CheckCircle size={18} className="text-success" />
+            I tuoi abbonamenti
+          </h2>
+          <div className="space-y-2">
+            {activeSubscriptions.map((sub) => (
+              <div key={sub.slug} className="flex items-center gap-4 p-4 rounded-xl bg-bg-card border border-success/30">
                 <div
-                  className="w-10 h-10 rounded-lg flex items-center justify-center text-white text-lg"
-                  style={{ backgroundColor: p.color }}
+                  className="w-10 h-10 rounded-lg flex items-center justify-center text-white text-sm font-bold"
+                  style={{ backgroundColor: sub.color }}
                 >
-                  {p.icon}
+                  {sub.seriesCovered}
                 </div>
                 <div className="flex-1">
-                  <p className="font-medium text-text-primary flex items-center gap-2">
-                    {p.name}
-                    {isActiveSub && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/10 text-success font-bold">
-                        ATTIVO
-                      </span>
-                    )}
-                    {isAlwaysOn && !isActiveSub && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent/10 text-accent-light font-medium">
-                        sempre attiva
-                      </span>
-                    )}
-                  </p>
+                  <p className="font-medium text-text-primary">{sub.name}</p>
                   <p className="text-xs text-text-secondary">
-                    {seriesCount > 0
-                      ? `${seriesCount} serie nella tua watchlist`
-                      : "Nessuna serie in watchlist"}
+                    {sub.seriesCovered} serie &middot; {sub.totalHours}h di contenuto
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="font-bold text-text-primary">
-                    &euro;{p.monthlyPrice.toFixed(2)}/mese
-                  </p>
-                  {costPerSeries !== undefined && seriesCount > 0 && (
-                    <p className="text-xs text-text-secondary">
-                      &euro;{costPerSeries.toFixed(2)}/serie
-                    </p>
-                  )}
-                </div>
-                {/* Value bar */}
-                <div className="w-24 h-2 rounded-full bg-bg-secondary overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all"
-                    style={{
-                      width: `${Math.min(
-                        (seriesCount / Math.max(1, summary.watchlistTotal)) * 100,
-                        100
-                      )}%`,
-                      backgroundColor: p.color,
-                    }}
-                  />
+                  <p className="font-bold text-text-primary">&euro;{sub.monthlyPrice.toFixed(2)}/mese</p>
+                  <p className="text-[10px] text-success font-medium">ATTIVO</p>
                 </div>
               </div>
-            );
-          })}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Rotation platforms */}
+      {platformUsage.size > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold text-text-primary">
+            Piattaforme in rotazione
+          </h2>
+          <div className="space-y-2">
+            {[...platformUsage.values()].map((p) => {
+              const totalCost = p.monthlyPrice * p.months;
+              return (
+                <div key={p.slug} className="flex items-center gap-4 p-4 rounded-xl bg-bg-card border border-border">
+                  <div
+                    className="w-10 h-10 rounded-lg flex items-center justify-center text-white text-sm font-bold"
+                    style={{ backgroundColor: p.color }}
+                  >
+                    {p.months}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-medium text-text-primary">{p.name}</p>
+                    <p className="text-xs text-text-secondary">
+                      {p.series.length > 0 ? p.series.join(", ") : "Serie in rotazione"}
+                    </p>
+                    <p className="text-xs text-text-secondary flex items-center gap-1 mt-0.5">
+                      <Clock size={10} />
+                      {p.totalHours}h &middot; {p.months} {p.months === 1 ? "mese" : "mesi"}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-text-primary">&euro;{p.monthlyPrice.toFixed(2)}/mese</p>
+                    <p className="text-xs text-text-secondary">Totale: &euro;{totalCost.toFixed(2)}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Free platforms */}
-      <div className="space-y-4">
-        <h2 className="text-lg font-semibold text-text-primary">
-          Piattaforme Gratuite
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {freePlatforms.map((p) => {
-            const scored_p = scored.find((s) => s.slug === p.slug);
-            const seriesCount = scored_p?.seriesAvailable.length || 0;
-
-            return (
-              <div
-                key={p.slug}
-                className="p-4 rounded-xl bg-bg-card border border-border"
-              >
+      {freePlatforms.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold text-text-primary">
+            Piattaforme gratuite
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {freePlatforms.map((p) => (
+              <div key={p.slug} className="p-4 rounded-xl bg-bg-card border border-border">
                 <div className="flex items-center gap-3">
                   <span className="text-xl">{p.icon}</span>
                   <div>
@@ -302,16 +304,11 @@ export default function CostiPage() {
                     <p className="text-xs text-success">GRATIS</p>
                   </div>
                 </div>
-                {seriesCount > 0 && (
-                  <p className="text-xs text-text-secondary mt-2">
-                    {seriesCount} serie disponibili
-                  </p>
-                )}
               </div>
-            );
-          })}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Annual projection */}
       <div className="p-6 rounded-xl bg-bg-card border border-border">
@@ -320,25 +317,21 @@ export default function CostiPage() {
         </h2>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <p className="text-sm text-text-secondary">
-              Senza rotazione (12 mesi)
-            </p>
+            <p className="text-sm text-text-secondary">Senza rotazione</p>
             <p className="text-2xl font-bold text-danger">
-              &euro;{(summary.totalPlatformsCost * 12).toFixed(2)}
+              &euro;{(allNeededCost * 12).toFixed(2)}
             </p>
           </div>
           <div>
-            <p className="text-sm text-text-secondary">
-              Con rotazione (12 mesi)
-            </p>
+            <p className="text-sm text-text-secondary">Con rotazione</p>
             <p className="text-2xl font-bold text-success">
-              &euro;{(summary.rotationMonthlyCost * 12).toFixed(2)}
+              &euro;{(withRotationCost * 12).toFixed(2)}
             </p>
           </div>
         </div>
         <div className="mt-4 p-4 rounded-lg bg-success/10 border border-success/30">
           <p className="text-success font-bold text-lg">
-            Risparmio annuo: &euro;{(summary.monthlySavings * 12).toFixed(2)}
+            Risparmio annuo: &euro;{(savings * 12).toFixed(2)}
           </p>
         </div>
       </div>
