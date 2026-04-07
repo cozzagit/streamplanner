@@ -19,6 +19,14 @@ import {
 } from "lucide-react";
 import { imageUrl } from "@/lib/tmdb";
 
+/** Format date as YYYY-MM-DD in local time (avoids UTC shift from toISOString) */
+function localDateStr(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 // ─── Types ──────────────────────────────────────────────────
 
 interface WatchlistSeries {
@@ -187,7 +195,7 @@ function ScheduleView() {
 
   const { schedule, stats } = data;
   const allDates = Object.keys(schedule).sort();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStr(new Date());
 
   // Get the week's dates
   const weekStart = new Date();
@@ -202,7 +210,7 @@ function ScheduleView() {
   for (let i = 0; i < 7; i++) {
     const d = new Date(weekStart);
     d.setDate(d.getDate() + i);
-    weekDates.push(d.toISOString().slice(0, 10));
+    weekDates.push(localDateStr(d));
   }
 
   const lastScheduleDate = allDates[allDates.length - 1];
@@ -631,7 +639,7 @@ function ReleasesView() {
     {}
   );
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStr(new Date());
   const todayCount = episodes.filter((e) => e.airDate === today).length;
   const upcomingCount = episodes.filter((e) => e.airDate > today).length;
 

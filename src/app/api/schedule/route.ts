@@ -11,6 +11,14 @@ const SCHEDULE_DAYS = 90;
 
 const DAY_KEYS = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"] as const;
 
+/** Format date as YYYY-MM-DD in local time (avoids UTC shift from toISOString) */
+function localDateStr(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 interface ScheduleEntry {
   seriesName: string;
   seriesTmdbId: number;
@@ -191,7 +199,7 @@ export async function GET() {
       if (availableHours <= 0) continue;
 
       let availableMinutes = availableHours * 60;
-      const dateStr = date.toISOString().slice(0, 10);
+      const dateStr = localDateStr(date);
       const dayEntries: ScheduleEntry[] = [];
 
       for (const item of queue) {
