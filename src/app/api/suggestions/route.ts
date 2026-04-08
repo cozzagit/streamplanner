@@ -89,6 +89,7 @@ export async function GET() {
 
   const confirmedHours = Math.round(confirmedMinutes / 60);
   const rotationHours = Math.round(rotationMinutes / 60);
+  console.log("[suggestions] confirmed:", confirmedHours, "h, rotation:", rotationHours, "h, activeSlugs:", [...activeSlugs]);
 
   // Build monthly capacity
   const now = new Date();
