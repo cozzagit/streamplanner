@@ -41,9 +41,11 @@ export async function GET() {
         email: users.email,
         role: users.role,
         createdAt: users.createdAt,
-        watchlistCount: sql<number>`CAST((SELECT COUNT(*) FROM watchlist WHERE user_id = ${users.id}) AS INTEGER)`.as("watchlist_count"),
+        watchlistCount: sql<number>`CAST(COUNT(${watchlist.id}) AS INTEGER)`.as("watchlist_count"),
       })
       .from(users)
+      .leftJoin(watchlist, eq(users.id, watchlist.userId))
+      .groupBy(users.id, users.name, users.email, users.role, users.createdAt)
       .orderBy(desc(users.createdAt)),
 
     // Total watchlist items
