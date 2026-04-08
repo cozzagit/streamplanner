@@ -165,7 +165,7 @@ export default function AdminPage() {
                   <p className="text-[11px] text-text-secondary truncate">{u.email}</p>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <p className="text-sm font-medium text-text-primary">{u.watchlistCount} serie</p>
+                  <p className="text-sm font-medium text-text-primary">{Number(u.watchlistCount)} serie</p>
                   <p className="text-[10px] text-text-secondary flex items-center gap-1 justify-end">
                     <Calendar size={9} />
                     {new Date(u.createdAt).toLocaleDateString("it-IT", {
