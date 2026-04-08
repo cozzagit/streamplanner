@@ -14,6 +14,11 @@ import {
   Calendar,
   BarChart3,
   Star,
+  Mail,
+  Send,
+  Clock,
+  CheckCircle,
+  AlertTriangle,
 } from "lucide-react";
 import { imageUrl } from "@/lib/tmdb";
 
@@ -41,6 +46,165 @@ interface AdminData {
   recentSignups: { date: string; count: number }[];
   statusDistribution: { status: string; count: number }[];
   priorityDistribution: { priority: string; count: number }[];
+}
+
+interface EmailResult {
+  action: string;
+  status: "idle" | "sending" | "sent" | "error";
+  message?: string;
+}
+
+function EmailPanel({ users }: { users: AdminData["users"] }) {
+  const [results, setResults] = useState<EmailResult[]>([]);
+  const [sending, setSending] = useState<string | null>(null);
+
+  const sendAction = async (action: string, label: string, extra?: Record<string, unknown>) => {
+    setSending(action);
+    setResults((prev) => [...prev, { action: label, status: "sending" }]);
+    try {
+      const res = await fetch("/api/admin/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, ...extra }),
+      });
+      const data = await res.json();
+      setResults((prev) =>
+        prev.map((r) =>
+          r.status === "sending" && r.action === label
+            ? {
+                ...r,
+                status: data.success || data.sent !== undefined ? "sent" : "error",
+                message: data.sent !== undefined
+                  ? `${data.sent} email inviate`
+                  : data.success
+                  ? `Inviata (${data.messageId?.slice(0, 20)}...)`
+                  : data.error || "Errore",
+              }
+            : r
+        )
+      );
+    } catch {
+      setResults((prev) =>
+        prev.map((r) =>
+          r.status === "sending" && r.action === label
+            ? { ...r, status: "error", message: "Errore di rete" }
+            : r
+        )
+      );
+    } finally {
+      setSending(null);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <h2 className="text-lg font-semibold text-text-primary flex items-center gap-2">
+        <Mail size={18} />
+        Gestione Email
+      </h2>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* Test */}
+        <button
+          onClick={() => sendAction("test", "Test SMTP")}
+          disabled={sending !== null}
+          className="p-4 rounded-xl bg-bg-card border border-border hover:border-accent/50 transition-colors text-left disabled:opacity-50"
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <Send size={16} className="text-accent-light" />
+            <span className="text-sm font-medium text-text-primary">Test SMTP</span>
+          </div>
+          <p className="text-[11px] text-text-secondary">Invia email di test a te stesso</p>
+        </button>
+
+        {/* Monthly digest - all */}
+        <button
+          onClick={() => sendAction("monthly-digest", "Digest mensile (tutti)")}
+          disabled={sending !== null}
+          className="p-4 rounded-xl bg-bg-card border border-border hover:border-accent/50 transition-colors text-left disabled:opacity-50"
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <Calendar size={16} className="text-warning" />
+            <span className="text-sm font-medium text-text-primary">Digest Mensile</span>
+          </div>
+          <p className="text-[11px] text-text-secondary">Invia riepilogo a tutti gli utenti</p>
+        </button>
+
+        {/* Nudge inactive */}
+        <button
+          onClick={() => sendAction("nudge-inactive", "Nudge inattivi (7gg)", { days: 7 })}
+          disabled={sending !== null}
+          className="p-4 rounded-xl bg-bg-card border border-border hover:border-accent/50 transition-colors text-left disabled:opacity-50"
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <Clock size={16} className="text-danger" />
+            <span className="text-sm font-medium text-text-primary">Nudge Inattivi</span>
+          </div>
+          <p className="text-[11px] text-text-secondary">Utenti inattivi da 7+ giorni</p>
+        </button>
+
+        {/* Digest to self only */}
+        <button
+          onClick={() => {
+            const adminEmail = users.find((u) => u.role === "admin")?.email;
+            if (adminEmail) sendAction("monthly-digest", "Digest (solo a me)", { to: adminEmail });
+          }}
+          disabled={sending !== null}
+          className="p-4 rounded-xl bg-bg-card border border-border hover:border-accent/50 transition-colors text-left disabled:opacity-50"
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <Mail size={16} className="text-success" />
+            <span className="text-sm font-medium text-text-primary">Digest a Me</span>
+          </div>
+          <p className="text-[11px] text-text-secondary">Anteprima digest solo al tuo account</p>
+        </button>
+      </div>
+
+      {/* Per-user actions */}
+      <div className="p-4 rounded-xl bg-bg-card border border-border">
+        <p className="text-xs text-text-secondary mb-3">Invii manuali per utente</p>
+        <div className="space-y-2">
+          {users.map((u) => (
+            <div key={u.id} className="flex items-center gap-3">
+              <span className="text-sm text-text-primary flex-1 truncate">{u.name} <span className="text-text-secondary">({u.email})</span></span>
+              <button
+                onClick={() => sendAction("welcome", `Welcome → ${u.name}`, { to: u.email })}
+                disabled={sending !== null}
+                className="text-[11px] px-2.5 py-1 rounded-lg bg-accent/10 text-accent-light hover:bg-accent/20 transition-colors disabled:opacity-50"
+              >
+                Welcome
+              </button>
+              <button
+                onClick={() => sendAction("monthly-digest", `Digest → ${u.name}`, { to: u.email })}
+                disabled={sending !== null}
+                className="text-[11px] px-2.5 py-1 rounded-lg bg-warning/10 text-warning hover:bg-warning/20 transition-colors disabled:opacity-50"
+              >
+                Digest
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Results log */}
+      {results.length > 0 && (
+        <div className="p-4 rounded-xl bg-bg-card border border-border">
+          <p className="text-xs text-text-secondary mb-2">Log invii</p>
+          <div className="space-y-1.5 max-h-40 overflow-y-auto">
+            {[...results].reverse().map((r, i) => (
+              <div key={i} className="flex items-center gap-2 text-xs">
+                {r.status === "sending" && <Loader2 size={12} className="animate-spin text-accent-light" />}
+                {r.status === "sent" && <CheckCircle size={12} className="text-success" />}
+                {r.status === "error" && <AlertTriangle size={12} className="text-danger" />}
+                <span className="text-text-primary">{r.action}</span>
+                {r.message && <span className="text-text-secondary">— {r.message}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
@@ -224,6 +388,9 @@ export default function AdminPage() {
           </div>
         </div>
       </div>
+
+      {/* Email Management */}
+      <EmailPanel users={users} />
 
       {/* Distribution stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">

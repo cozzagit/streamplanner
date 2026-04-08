@@ -153,6 +153,97 @@ export function inactivityNudgeEmail(
   };
 }
 
+const PLATFORM_COLORS: Record<string, string> = {
+  netflix: "#E50914", "amazon-prime": "#00A8E1", "disney-plus": "#0063E5",
+  "apple-tv-plus": "#a3a3a3", "paramount-plus": "#0064FF", "now-sky": "#00E054",
+  crunchyroll: "#F47521", "discovery-plus": "#003BE5", mubi: "#001A22",
+  raiplay: "#003CA6", "pluto-tv": "#2D2D2D", "mediaset-infinity": "#1428A0",
+};
+const PLATFORM_NAMES: Record<string, string> = {
+  netflix: "Netflix", "amazon-prime": "Amazon Prime", "disney-plus": "Disney+",
+  "apple-tv-plus": "Apple TV+", "paramount-plus": "Paramount+", "now-sky": "NOW",
+  crunchyroll: "Crunchyroll", "discovery-plus": "Discovery+", mubi: "MUBI",
+  raiplay: "RaiPlay", "pluto-tv": "Pluto TV", "mediaset-infinity": "Mediaset Infinity",
+};
+const PRIORITY_ICON: Record<string, string> = {
+  high: '<span style="color:#ef4444;font-size:10px;">&#9650; ALTA</span>',
+  medium: "",
+  low: '<span style="color:#8888a0;font-size:10px;">&#9660; BASSA</span>',
+};
+
+export function monthlyDigestEmail(
+  userName: string,
+  watching: { name: string; watched: number; total: number; pct: number }[],
+  toWatch: { name: string; episodes: number; priority: string }[],
+  activeSubSlugs: string[]
+): { subject: string; html: string } {
+  const now = new Date();
+  const monthName = now.toLocaleDateString("it-IT", { month: "long", year: "numeric" });
+  const monthCap = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+
+  const activeBadges = activeSubSlugs
+    .map((slug) => {
+      const color = PLATFORM_COLORS[slug] || "#6366f1";
+      const name = PLATFORM_NAMES[slug] || slug;
+      return `<span style="background:${color};color:#fff;padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;display:inline-block;margin:2px;">${name}</span>`;
+    })
+    .join(" ");
+
+  const watchingHtml = watching
+    .map(
+      (s) => `<div style="padding:8px 12px;background:#1a1a2e;border-radius:8px;margin:4px 0;color:#e4e4ef;font-size:13px;">
+        ${s.name} <span style="color:#8888a0;">- ${s.watched}/${s.total} ep (${s.pct}%)</span>
+        <div style="background:#2a2a3e;border-radius:4px;height:4px;margin-top:6px;">
+          <div style="background:#6366f1;border-radius:4px;height:4px;width:${s.pct}%;"></div>
+        </div>
+      </div>`
+    )
+    .join("");
+
+  const toWatchHtml = toWatch
+    .slice(0, 8)
+    .map(
+      (s) => `<div style="padding:6px 12px;background:#1a1a2e;border-radius:8px;margin:4px 0;color:#e4e4ef;font-size:13px;">
+        ${PRIORITY_ICON[s.priority] || ""} ${s.name} <span style="color:#8888a0;font-size:11px;">(${s.episodes} ep)</span>
+      </div>`
+    )
+    .join("");
+
+  return {
+    subject: `Il tuo riepilogo streaming - ${monthCap}`,
+    html: wrapHtml(`
+      <h2 style="margin:0 0 6px;color:#e4e4ef;font-size:22px;">Ciao ${userName}!</h2>
+      <p style="color:#8888a0;margin:0 0 24px;font-size:14px;">Ecco il tuo riepilogo streaming per <strong style="color:#e4e4ef;">${monthCap}</strong></p>
+
+      ${activeSubSlugs.length > 0 ? `
+      <div style="padding:16px;background:#12121a;border-radius:12px;margin:0 0 16px;">
+        <p style="margin:0 0 10px;font-size:11px;color:#8888a0;text-transform:uppercase;letter-spacing:1px;">I tuoi abbonamenti attivi</p>
+        ${activeBadges}
+      </div>` : ""}
+
+      <div style="padding:16px;background:#12121a;border-radius:12px;margin:0 0 16px;">
+        <p style="margin:0 0 12px;font-size:11px;color:#8888a0;text-transform:uppercase;letter-spacing:1px;">La tua watchlist</p>
+        ${watching.length > 0 ? `
+          <p style="margin:0 0 6px;font-size:13px;color:#f59e0b;font-weight:600;">&#9654; In corso (${watching.length})</p>
+          ${watchingHtml}
+          <div style="height:12px;"></div>
+        ` : ""}
+        ${toWatch.length > 0 ? `
+          <p style="margin:0 0 6px;font-size:13px;color:#818cf8;font-weight:600;">&#128205; Da vedere (${toWatch.length})</p>
+          ${toWatchHtml}
+          ${toWatch.length > 8 ? `<p style="color:#8888a0;font-size:12px;margin:8px 0 0;">...e altre ${toWatch.length - 8}</p>` : ""}
+        ` : ""}
+      </div>
+
+      <div style="text-align:center;">
+        <a href="${APP_URL}/planner" style="display:inline-block;background:#6366f1;color:#fff;text-decoration:none;padding:12px 28px;border-radius:10px;font-weight:600;font-size:14px;">
+          Apri il Planner
+        </a>
+      </div>
+    `),
+  };
+}
+
 export function testEmail(): { subject: string; html: string } {
   return {
     subject: "StreamPlanner - Test Email",
