@@ -11,7 +11,8 @@ interface MonthData {
   month: number;
   year: number;
   availableHours: number;
-  plannedHours: number;
+  confirmedHours: number;
+  rotationHours: number;
 }
 
 interface SuggestedSeries {
@@ -27,6 +28,8 @@ interface SuggestionsResponse {
   stats: {
     monthlyHours: number;
     totalPlannedHours: number;
+    confirmedHours: number;
+    rotationHours: number;
     watchlistSize: number;
     totalFreeHours: number;
   };
@@ -76,51 +79,72 @@ export function SmartSuggestions() {
         <div className="flex-1">
           <p className="text-sm font-semibold text-text-primary">Capacita Visione</p>
           <p className="text-[11px] text-text-secondary">
-            {stats.totalPlannedHours}h pianificate
-            {hasFreeTime && (
-              <span className="text-warning"> · {stats.totalFreeHours}h libere nei prossimi 6 mesi</span>
-            )}
+            {stats.confirmedHours || 0}h sicure
+            {(stats.rotationHours || 0) > 0 && <span className="text-accent-light"> + {stats.rotationHours}h con rotazione</span>}
+            {hasFreeTime && <span className="text-warning"> · {stats.totalFreeHours}h libere</span>}
           </p>
         </div>
       </div>
 
       {/* Monthly bars */}
-      <div className="p-4">
+      <div className="p-4 space-y-3">
         <div className="flex gap-2 items-end">
           {months.map((m) => {
-            const pct = m.availableHours > 0 ? Math.min(100, Math.round((m.plannedHours / m.availableHours) * 100)) : 0;
-            const freeHours = Math.max(0, m.availableHours - m.plannedHours);
-            const isFull = pct >= 90;
-            const isEmpty = pct === 0 && m.availableHours > 0;
+            const confPct = m.availableHours > 0 ? Math.min(100, Math.round((m.confirmedHours / m.availableHours) * 100)) : 0;
+            const rotPct = m.availableHours > 0 ? Math.min(100 - confPct, Math.round((m.rotationHours / m.availableHours) * 100)) : 0;
+            const totalPct = confPct + rotPct;
+            const freeHours = Math.max(0, m.availableHours - m.confirmedHours - m.rotationHours);
 
             return (
               <div key={`${m.month}-${m.year}`} className="flex-1 flex flex-col items-center gap-1">
-                {/* Bar */}
                 <div className="w-full h-24 bg-bg-secondary rounded-lg overflow-hidden flex flex-col justify-end relative">
-                  <div
-                    className={`w-full rounded-t-sm transition-all ${
-                      isFull ? "bg-success" : isEmpty ? "bg-transparent" : "bg-accent"
-                    }`}
-                    style={{ height: `${pct}%` }}
-                  />
-                  {/* Percentage label */}
+                  {/* Rotation layer (top, striped) */}
+                  {rotPct > 0 && (
+                    <div
+                      className="w-full bg-accent/30"
+                      style={{
+                        height: `${rotPct}%`,
+                        backgroundImage: "repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(99,102,241,0.15) 3px, rgba(99,102,241,0.15) 6px)",
+                      }}
+                    />
+                  )}
+                  {/* Confirmed layer (bottom, solid) */}
+                  {confPct > 0 && (
+                    <div
+                      className={`w-full ${totalPct >= 90 ? "bg-success" : "bg-accent"}`}
+                      style={{ height: `${confPct}%` }}
+                    />
+                  )}
+                  {/* Percentage */}
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <span className={`text-[10px] font-bold ${
-                      pct > 50 ? "text-white" : "text-text-secondary"
-                    }`}>
-                      {pct}%
+                    <span className={`text-[10px] font-bold ${totalPct > 50 ? "text-white" : "text-text-secondary"}`}>
+                      {confPct}%
                     </span>
                   </div>
                 </div>
-                {/* Month label */}
                 <span className="text-[10px] font-medium text-text-secondary">{m.label}</span>
-                {/* Hours detail */}
                 <span className={`text-[9px] tabular-nums ${freeHours > 0 ? "text-warning" : "text-success"}`}>
-                  {freeHours > 0 ? `${freeHours}h libere` : "pieno"}
+                  {freeHours > 0 ? `${freeHours}h` : "pieno"}
                 </span>
               </div>
             );
           })}
+        </div>
+        {/* Legend */}
+        <div className="flex items-center gap-4 text-[10px] text-text-secondary">
+          <span className="flex items-center gap-1">
+            <span className="w-3 h-3 rounded-sm bg-accent inline-block" /> Abbonamenti attivi
+          </span>
+          {months.some((m) => m.rotationHours > 0) && (
+            <span className="flex items-center gap-1">
+              <span className="w-3 h-3 rounded-sm bg-accent/30 inline-block" style={{
+                backgroundImage: "repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(99,102,241,0.2) 2px, rgba(99,102,241,0.2) 4px)",
+              }} /> Con rotazione
+            </span>
+          )}
+          <span className="flex items-center gap-1">
+            <span className="w-3 h-3 rounded-sm bg-bg-secondary inline-block border border-border" /> Libero
+          </span>
         </div>
       </div>
 

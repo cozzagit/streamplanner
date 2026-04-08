@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { watchlist, series, settings } from "@/db/schema";
+import { watchlist, series, settings, seriesPlatforms, platforms } from "@/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { discoverByProvider } from "@/lib/tmdb";
 import { TRACKED_PLATFORMS } from "@/lib/platforms";
@@ -50,35 +50,82 @@ export async function GET() {
     return sum + Math.ceil((remaining * (item.runTime || 45)) / 60);
   }, 0);
 
-  // Build monthly capacity breakdown (next 6 months)
+  // Separate hours into "confirmed" (active subs + free) and "rotation" (needs subscription)
+  const allPlatforms = await db.select().from(platforms);
+  const freeSlugs = new Set(allPlatforms.filter((p) => p.isFree).map((p) => p.slug));
+  const activeSlugs = new Set([...activeSubs, ...Array.from(freeSlugs)]);
+
+  let confirmedMinutes = 0;
+  let rotationMinutes = 0;
+
+  for (const item of userItems) {
+    const remaining = (item.totalEpisodes || 0) - (item.watchedEpisodes || 0);
+    if (remaining <= 0) continue;
+    const mins = remaining * (item.runTime || 45);
+
+    const seriesRecord = await db
+      .select({ id: series.id })
+      .from(series)
+      .where(eq(series.tmdbId, item.tmdbId))
+      .limit(1);
+    if (!seriesRecord[0]) continue;
+
+    const platformLinks = await db
+      .select({ platformId: seriesPlatforms.platformId })
+      .from(seriesPlatforms)
+      .where(eq(seriesPlatforms.seriesId, seriesRecord[0].id));
+
+    const isOnActive = platformLinks.some((pl) => {
+      const p = allPlatforms.find((x) => x.id === pl.platformId);
+      return p && activeSlugs.has(p.slug!);
+    });
+
+    if (isOnActive) {
+      confirmedMinutes += mins;
+    } else {
+      rotationMinutes += mins;
+    }
+  }
+
+  const confirmedHours = Math.round(confirmedMinutes / 60);
+  const rotationHours = Math.round(rotationMinutes / 60);
+
+  // Build monthly capacity with confirmed vs rotation split
   const now = new Date();
-  const months: { label: string; month: number; year: number; availableHours: number; plannedHours: number }[] = [];
-  let hoursRemaining = totalPlannedHours;
+  const months: {
+    label: string; month: number; year: number;
+    availableHours: number; confirmedHours: number; rotationHours: number;
+  }[] = [];
+  let confLeft = confirmedHours;
+  let rotLeft = rotationHours;
 
   for (let i = 0; i < 6; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
     const label = d.toLocaleDateString("it-IT", { month: "short" }).replace(".", "");
     const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
 
-    // Calculate available hours for this month accounting for day of week distribution
     let available = 0;
     for (let day = 1; day <= daysInMonth; day++) {
-      // Skip past days in current month
       if (i === 0 && day < now.getDate()) continue;
       const dayDate = new Date(d.getFullYear(), d.getMonth(), day);
       const dayKeys = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"];
       available += weeklySchedule[dayKeys[dayDate.getDay()]] || 0;
     }
 
-    const planned = Math.min(hoursRemaining, available);
-    hoursRemaining = Math.max(0, hoursRemaining - available);
+    // Fill with confirmed first, then rotation
+    const conf = Math.min(confLeft, available);
+    confLeft = Math.max(0, confLeft - available);
+    const remainingSlot = Math.max(0, available - conf);
+    const rot = Math.min(rotLeft, remainingSlot);
+    rotLeft = Math.max(0, rotLeft - remainingSlot);
 
     months.push({
       label: label.charAt(0).toUpperCase() + label.slice(1),
       month: d.getMonth() + 1,
       year: d.getFullYear(),
       availableHours: Math.round(available),
-      plannedHours: Math.round(planned),
+      confirmedHours: Math.round(conf),
+      rotationHours: Math.round(rot),
     });
   }
 
@@ -121,9 +168,11 @@ export async function GET() {
     suggestions: allSuggestions,
     stats: {
       monthlyHours,
-      totalPlannedHours,
+      totalPlannedHours: confirmedHours + rotationHours,
+      confirmedHours,
+      rotationHours,
       watchlistSize: watchlistTmdbIds.size,
-      totalFreeHours: months.reduce((a, m) => a + Math.max(0, m.availableHours - m.plannedHours), 0),
+      totalFreeHours: months.reduce((a, m) => a + Math.max(0, m.availableHours - m.confirmedHours - m.rotationHours), 0),
     },
   });
 }
