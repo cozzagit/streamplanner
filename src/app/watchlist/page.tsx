@@ -13,6 +13,8 @@ import {
   CheckCircle,
   XCircle,
   Filter,
+  AlertTriangle,
+  X,
 } from "lucide-react";
 import { imageUrl } from "@/lib/tmdb";
 
@@ -183,6 +185,7 @@ export default function WatchlistPage() {
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
   const [filterPriority, setFilterPriority] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ tmdbId: number; name: string } | null>(null);
 
   const fetchWatchlist = async () => {
     setLoading(true);
@@ -394,9 +397,7 @@ export default function WatchlistPage() {
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      if (confirm(`Rimuovere "${item.series.name}" dalla watchlist?`)) {
-                        removeItem(item.series.tmdbId);
-                      }
+                      setConfirmDelete({ tmdbId: item.series.tmdbId, name: item.series.name });
                     }}
                     className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/60 backdrop-blur-sm text-white/70 hover:text-danger hover:bg-danger/20 transition-all md:opacity-0 md:group-hover:opacity-100"
                   >
@@ -497,6 +498,51 @@ export default function WatchlistPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setConfirmDelete(null)}
+          />
+          <div className="relative w-full max-w-sm rounded-2xl bg-bg-card border border-border p-6 shadow-2xl fade-in">
+            <button
+              onClick={() => setConfirmDelete(null)}
+              className="absolute top-4 right-4 text-text-secondary hover:text-text-primary transition-colors"
+            >
+              <X size={18} />
+            </button>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-danger/15 flex items-center justify-center">
+                <AlertTriangle size={20} className="text-danger" />
+              </div>
+              <h3 className="text-sm font-semibold text-text-primary">Rimuovere dalla watchlist?</h3>
+            </div>
+            <p className="text-sm text-text-secondary mb-6">
+              Stai per rimuovere <strong className="text-text-primary">{confirmDelete.name}</strong> dalla tua watchlist. Il progresso verra perso.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  removeItem(confirmDelete.tmdbId);
+                  setConfirmDelete(null);
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-danger text-white text-sm font-medium flex items-center justify-center gap-2 hover:bg-danger/90 transition-colors"
+              >
+                <Trash2 size={14} />
+                Si, rimuovi
+              </button>
+              <button
+                onClick={() => setConfirmDelete(null)}
+                className="flex-1 py-2.5 rounded-xl bg-bg-secondary text-text-secondary text-sm font-medium hover:text-text-primary transition-colors"
+              >
+                Annulla
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
