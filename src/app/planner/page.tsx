@@ -18,6 +18,7 @@ import {
   Timer,
   AlertCircle,
 } from "lucide-react";
+import { SmartSuggestions } from "@/components/smart-suggestions";
 
 interface CoveredSeries {
   name: string;
@@ -322,6 +323,9 @@ export default function PlannerPage() {
           </div>
         </div>
       )}
+
+      {/* Smart suggestions */}
+      <SmartSuggestions />
 
       {/* Uncovered series warning */}
       {data.uncoveredSeries && data.uncoveredSeries.length > 0 && (
