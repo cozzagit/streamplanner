@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { watchlist, series, seriesPlatforms, platforms, settings } from "@/db/schema";
+import { watchlist, series, seriesPlatforms, platforms, settings, rotationPlans } from "@/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { getSessionUser, unauthorized } from "@/lib/get-user";
 
@@ -154,9 +154,27 @@ export async function GET() {
     }
 
     // 5. Compute rotation windows for paid platforms
-    // These define WHEN to subscribe, but series on active subs run in parallel
     const now = new Date();
     const currentMonthIdx = monthIndex(now);
+    const dayOfMonth = now.getDate();
+
+    // Load confirmed rotation plans to know which platforms user has activated
+    const confirmedPlans = await db
+      .select({
+        month: rotationPlans.month,
+        year: rotationPlans.year,
+        platformId: rotationPlans.platformId,
+        isConfirmed: rotationPlans.isConfirmed,
+      })
+      .from(rotationPlans)
+      .where(eq(rotationPlans.userId, user.id));
+
+    // Build set of confirmed platform IDs for current month
+    const confirmedThisMonth = new Set(
+      confirmedPlans
+        .filter((p) => p.month === now.getMonth() + 1 && p.year === now.getFullYear() && p.isConfirmed)
+        .map((p) => p.platformId)
+    );
 
     const rotationByPlatform = new Map<string, SeriesItem[]>();
     for (const s of allSeries) {
@@ -174,23 +192,36 @@ export async function GET() {
           s.priority === "high" ? 3 : s.priority === "medium" ? 2 : 1
         ));
         const hasWatching = seriesList.some((s) => s.status === "watching");
-        return { slug, seriesList, totalHours, monthsNeeded, maxPriority, hasWatching };
+
+        // Check if this platform was confirmed for the current month
+        const platformRecord = allPlatforms.find((p) => p.slug === slug);
+        const isConfirmedThisMonth = platformRecord ? confirmedThisMonth.has(platformRecord.id) : false;
+
+        return { slug, seriesList, totalHours, monthsNeeded, maxPriority, hasWatching, isConfirmedThisMonth };
       })
       .sort((a, b) => {
-        // Priority is king — user's explicit choice
         if (a.maxPriority !== b.maxPriority) return b.maxPriority - a.maxPriority;
-        // Within same priority, watching series get preference
         if (a.hasWatching && !b.hasWatching) return -1;
         if (!a.hasWatching && b.hasWatching) return 1;
-        // Then more content first (use platform efficiently)
         return b.totalHours - a.totalHours;
       });
 
-    // Assign month windows sequentially starting from current month
+    // Assign month windows sequentially
+    // KEY LOGIC: If we're past day 7 of the month and a rotation platform
+    // hasn't been confirmed for this month, push it to next month.
+    // The user hasn't activated it yet, so don't schedule content on it now.
     let nextMonthStart = currentMonthIdx;
-    for (const { seriesList, monthsNeeded } of platformRotationOrder) {
-      const fromMonth = nextMonthStart;
-      const untilMonth = nextMonthStart + monthsNeeded - 1;
+    const lateInMonth = dayOfMonth > 7;
+
+    for (const { seriesList, monthsNeeded, isConfirmedThisMonth } of platformRotationOrder) {
+      let fromMonth = nextMonthStart;
+
+      // If this is the current month, late in the month, and platform not confirmed → skip to next
+      if (fromMonth === currentMonthIdx && lateInMonth && !isConfirmedThisMonth) {
+        fromMonth = currentMonthIdx + 1;
+      }
+
+      const untilMonth = fromMonth + monthsNeeded - 1;
       for (const s of seriesList) {
         s.activeFromMonth = fromMonth;
         s.activeUntilMonth = untilMonth;
