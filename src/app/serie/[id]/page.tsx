@@ -536,21 +536,23 @@ export default function SerieDetailPage({
       </div>
 
       {/* Overview + Where to watch — two columns on desktop */}
-      <div className="grid grid-cols-1 md:grid-cols-[1fr,auto] gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_20rem] gap-6 items-start">
         {/* Left: Trama */}
-        {detail.overview && (
-          <div>
-            <h2 className="text-lg font-semibold text-text-primary mb-2">
-              Trama
-            </h2>
-            <p className="text-text-secondary leading-relaxed">
-              {detail.overview}
-            </p>
-          </div>
-        )}
+        <div>
+          {detail.overview && (
+            <>
+              <h2 className="text-lg font-semibold text-text-primary mb-2">
+                Trama
+              </h2>
+              <p className="text-text-secondary leading-relaxed">
+                {detail.overview}
+              </p>
+            </>
+          )}
+        </div>
 
         {/* Right: Dove Guardarla */}
-        <div className="md:w-72 lg:w-80">
+        <div>
           <h2 className="text-lg font-semibold text-text-primary mb-3">
             Dove Guardarla
           </h2>
