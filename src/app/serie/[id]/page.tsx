@@ -230,6 +230,58 @@ function SeriesNews({ seriesName }: { seriesName: string }) {
   );
 }
 
+/** Tabbed container for Trailer + News */
+function MediaTabs({ trailers, seriesName }: { trailers: TMDBVideo[]; seriesName: string }) {
+  const [activeTab, setActiveTab] = useState<"trailer" | "notizie">(
+    trailers.length > 0 ? "trailer" : "notizie"
+  );
+
+  return (
+    <div>
+      <div className="flex gap-1 p-1 rounded-xl bg-bg-card border border-border w-fit mb-4">
+        <button
+          onClick={() => setActiveTab("trailer")}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            activeTab === "trailer"
+              ? "bg-accent text-white"
+              : "text-text-secondary hover:text-text-primary"
+          }`}
+        >
+          <Play size={14} />
+          Trailer{trailers.length > 0 && ` (${trailers.length})`}
+        </button>
+        <button
+          onClick={() => setActiveTab("notizie")}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            activeTab === "notizie"
+              ? "bg-accent text-white"
+              : "text-text-secondary hover:text-text-primary"
+          }`}
+        >
+          <Newspaper size={14} />
+          Notizie
+        </button>
+      </div>
+
+      {activeTab === "trailer" && (
+        trailers.length > 0 ? (
+          <div className={`grid gap-3 ${trailers.length > 1 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1 max-w-2xl"}`}>
+            {trailers.slice(0, 4).map((v) => (
+              <YouTubeTrailer key={v.id} video={v} />
+            ))}
+          </div>
+        ) : (
+          <p className="text-text-secondary text-sm py-4">Nessun trailer disponibile</p>
+        )
+      )}
+
+      {activeTab === "notizie" && (
+        <SeriesNews seriesName={seriesName} />
+      )}
+    </div>
+  );
+}
+
 interface WatchlistData {
   id: string;
   watchedEpisodes: number;
@@ -495,35 +547,13 @@ export default function SerieDetailPage({
         </div>
       )}
 
-      {/* Trailer */}
+      {/* Trailer & News tabs */}
       {(() => {
         const trailers = (detail.videos?.results || [])
           .filter((v) => v.site === "YouTube" && (v.type === "Trailer" || v.type === "Teaser"))
           .sort((a, b) => (a.type === "Trailer" ? -1 : 1));
-        if (trailers.length === 0) return null;
-        return (
-          <div>
-            <h2 className="text-lg font-semibold text-text-primary mb-3 flex items-center gap-2">
-              <Play size={18} className="text-accent-light" />
-              Trailer
-            </h2>
-            <div className={`grid gap-3 ${trailers.length > 1 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1 max-w-2xl"}`}>
-              {trailers.slice(0, 4).map((v) => (
-                <YouTubeTrailer key={v.id} video={v} />
-              ))}
-            </div>
-          </div>
-        );
+        return <MediaTabs trailers={trailers} seriesName={detail.name} />;
       })()}
-
-      {/* News */}
-      <div>
-        <h2 className="text-lg font-semibold text-text-primary mb-3 flex items-center gap-2">
-          <Newspaper size={18} className="text-accent-light" />
-          Ultime Notizie
-        </h2>
-        <SeriesNews seriesName={detail.name} />
-      </div>
 
       {/* Where to watch */}
       <div>
