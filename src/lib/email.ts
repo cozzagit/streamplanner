@@ -244,6 +244,35 @@ export function monthlyDigestEmail(
   };
 }
 
+export function passwordResetEmail(userName: string, resetUrl: string): { subject: string; html: string } {
+  return {
+    subject: "Reimposta la tua password - StreamPlanner",
+    html: wrapHtml(`
+      <h2 style="margin:0 0 16px;color:#e4e4ef;font-size:20px;">Ciao ${userName},</h2>
+      <p style="color:#8888a0;line-height:1.6;margin:0 0 20px;">
+        Hai richiesto di reimpostare la password del tuo account StreamPlanner.
+        Clicca il bottone qui sotto per scegliere una nuova password:
+      </p>
+      <div style="text-align:center;margin:24px 0;">
+        <a href="${resetUrl}" style="display:inline-block;background:#6366f1;color:#fff;text-decoration:none;padding:14px 32px;border-radius:10px;font-weight:600;font-size:15px;">
+          Reimposta Password
+        </a>
+      </div>
+      <p style="color:#8888a0;font-size:12px;line-height:1.6;margin:0 0 8px;">
+        Questo link scade tra <strong style="color:#e4e4ef;">1 ora</strong>.
+      </p>
+      <p style="color:#8888a0;font-size:12px;line-height:1.6;margin:0;">
+        Se non hai richiesto tu il reset, puoi ignorare questa email. La tua password non verra modificata.
+      </p>
+      <div style="margin-top:20px;padding:12px;background:#12121a;border-radius:8px;">
+        <p style="color:#8888a0;font-size:11px;margin:0;word-break:break-all;">
+          Link diretto: ${resetUrl}
+        </p>
+      </div>
+    `),
+  };
+}
+
 export function testEmail(): { subject: string; html: string } {
   return {
     subject: "StreamPlanner - Test Email",

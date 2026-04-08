@@ -9,6 +9,6 @@ export const config = {
      * - /_next (Next.js internals)
      * - /favicon.ico, /placeholder-poster.svg (static files)
      */
-    "/((?!login|registrati|landing|api/auth|_next|favicon\\.ico|placeholder-poster\\.svg).*)",
+    "/((?!login|registrati|landing|password-dimenticata|reset-password|api/auth|api/cron|_next|favicon\\.ico|placeholder-poster\\.svg).*)",
   ],
 };

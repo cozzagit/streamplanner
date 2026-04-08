@@ -1,7 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Settings, Save, Loader2, Check, Ban, CreditCard, Clock, Plus, Minus } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { signOut } from "next-auth/react";
+import {
+  Settings, Save, Loader2, Check, Ban, CreditCard, Clock, Plus, Minus,
+  User, Lock, Trash2, AlertTriangle, CheckCircle, AlertCircle,
+} from "lucide-react";
 import { TRACKED_PLATFORMS, DEFAULT_ACTIVE_SUBSCRIPTIONS } from "@/lib/platforms";
 
 const DAY_LABELS = [
@@ -19,6 +24,7 @@ const DEFAULT_WEEKLY: Record<string, number> = {
 };
 
 export default function ImpostazioniPage() {
+  const router = useRouter();
   const [budget, setBudget] = useState(15);
   const [alwaysOn, setAlwaysOn] = useState<string[]>([]);
   const [excluded, setExcluded] = useState<string[]>([]);
@@ -28,7 +34,35 @@ export default function ImpostazioniPage() {
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // Account state
+  const [profileName, setProfileName] = useState("");
+  const [profileEmail, setProfileEmail] = useState("");
+  const [profileCreatedAt, setProfileCreatedAt] = useState("");
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileMsg, setProfileMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwMsg, setPwMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteMsg, setDeleteMsg] = useState<string | null>(null);
+
   useEffect(() => {
+    // Load profile
+    fetch("/api/auth/profile")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.name) setProfileName(data.name);
+        if (data.email) setProfileEmail(data.email);
+        if (data.createdAt) setProfileCreatedAt(data.createdAt);
+      })
+      .catch(() => {});
+
     fetch("/api/settings")
       .then((r) => r.json())
       .then((data) => {
@@ -325,6 +359,254 @@ export default function ImpostazioniPage() {
         </div>
       )}
 
+      {/* Save button */}
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        className="w-full py-3 rounded-xl bg-accent text-white font-medium flex items-center justify-center gap-2 hover:bg-accent-light transition-colors disabled:opacity-50"
+      >
+        {saving ? (
+          <Loader2 size={18} className="animate-spin" />
+        ) : saved ? (
+          <Check size={18} />
+        ) : (
+          <Save size={18} />
+        )}
+        {saved ? "Salvato!" : "Salva Impostazioni"}
+      </button>
+
+      {/* ═══ ACCOUNT SECTION ═══ */}
+      <div className="border-t border-border pt-6 mt-6">
+        <h2 className="text-xl font-bold text-text-primary flex items-center gap-2 mb-6">
+          <User size={20} />
+          Account
+        </h2>
+
+        {/* Profile */}
+        <div className="p-6 rounded-xl bg-bg-card border border-border space-y-4 mb-4">
+          <h3 className="font-semibold text-text-primary flex items-center gap-2">
+            <User size={16} />
+            Profilo
+          </h3>
+          {profileMsg && (
+            <div className={`flex items-center gap-2 p-3 rounded-lg text-sm ${
+              profileMsg.type === "success" ? "bg-success/10 border border-success/30 text-success" : "bg-danger/10 border border-danger/30 text-danger"
+            }`}>
+              {profileMsg.type === "success" ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
+              {profileMsg.text}
+            </div>
+          )}
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-text-secondary mb-1">Nome</label>
+              <input
+                type="text"
+                value={profileName}
+                onChange={(e) => setProfileName(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl bg-bg-secondary border border-border text-text-primary text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-text-secondary mb-1">Email</label>
+              <input
+                type="email"
+                value={profileEmail}
+                onChange={(e) => setProfileEmail(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl bg-bg-secondary border border-border text-text-primary text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+              />
+            </div>
+            {profileCreatedAt && (
+              <p className="text-[11px] text-text-secondary">
+                Iscritto dal {new Date(profileCreatedAt).toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" })}
+              </p>
+            )}
+          </div>
+          <button
+            onClick={async () => {
+              setProfileSaving(true);
+              setProfileMsg(null);
+              try {
+                const res = await fetch("/api/auth/profile", {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ name: profileName, email: profileEmail }),
+                });
+                const data = await res.json();
+                if (res.ok) {
+                  setProfileMsg({ type: "success", text: "Profilo aggiornato. Effettua di nuovo il login per vedere le modifiche nella sidebar." });
+                } else {
+                  setProfileMsg({ type: "error", text: data.error });
+                }
+              } catch {
+                setProfileMsg({ type: "error", text: "Errore di connessione" });
+              } finally {
+                setProfileSaving(false);
+              }
+            }}
+            disabled={profileSaving}
+            className="px-5 py-2 rounded-xl bg-accent text-white text-sm font-medium flex items-center gap-2 hover:bg-accent-light transition-colors disabled:opacity-50"
+          >
+            {profileSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+            Salva Profilo
+          </button>
+        </div>
+
+        {/* Change Password */}
+        <div className="p-6 rounded-xl bg-bg-card border border-border space-y-4 mb-4">
+          <h3 className="font-semibold text-text-primary flex items-center gap-2">
+            <Lock size={16} />
+            Cambia Password
+          </h3>
+          {pwMsg && (
+            <div className={`flex items-center gap-2 p-3 rounded-lg text-sm ${
+              pwMsg.type === "success" ? "bg-success/10 border border-success/30 text-success" : "bg-danger/10 border border-danger/30 text-danger"
+            }`}>
+              {pwMsg.type === "success" ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
+              {pwMsg.text}
+            </div>
+          )}
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-text-secondary mb-1">Password attuale</label>
+              <input
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl bg-bg-secondary border border-border text-text-primary text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+                placeholder="La tua password attuale"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-text-secondary mb-1">Nuova password</label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl bg-bg-secondary border border-border text-text-primary text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+                placeholder="Minimo 6 caratteri"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-text-secondary mb-1">Conferma nuova password</label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl bg-bg-secondary border border-border text-text-primary text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+                placeholder="Ripeti la nuova password"
+              />
+            </div>
+          </div>
+          <button
+            onClick={async () => {
+              if (newPassword !== confirmPassword) {
+                setPwMsg({ type: "error", text: "Le password non corrispondono" });
+                return;
+              }
+              setPwSaving(true);
+              setPwMsg(null);
+              try {
+                const res = await fetch("/api/auth/change-password", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ currentPassword, newPassword }),
+                });
+                const data = await res.json();
+                if (res.ok) {
+                  setPwMsg({ type: "success", text: "Password aggiornata" });
+                  setCurrentPassword("");
+                  setNewPassword("");
+                  setConfirmPassword("");
+                } else {
+                  setPwMsg({ type: "error", text: data.error });
+                }
+              } catch {
+                setPwMsg({ type: "error", text: "Errore di connessione" });
+              } finally {
+                setPwSaving(false);
+              }
+            }}
+            disabled={pwSaving || !currentPassword || !newPassword}
+            className="px-5 py-2 rounded-xl bg-accent text-white text-sm font-medium flex items-center gap-2 hover:bg-accent-light transition-colors disabled:opacity-50"
+          >
+            {pwSaving ? <Loader2 size={14} className="animate-spin" /> : <Lock size={14} />}
+            Cambia Password
+          </button>
+        </div>
+
+        {/* Delete Account */}
+        <div className="p-6 rounded-xl bg-bg-card border border-danger/30 space-y-4">
+          <h3 className="font-semibold text-danger flex items-center gap-2">
+            <Trash2 size={16} />
+            Elimina Account
+          </h3>
+          <p className="text-sm text-text-secondary">
+            Questa azione e irreversibile. Tutti i tuoi dati, watchlist e impostazioni verranno eliminati permanentemente.
+          </p>
+          {!deleteConfirm ? (
+            <button
+              onClick={() => setDeleteConfirm(true)}
+              className="px-5 py-2 rounded-xl bg-danger/10 text-danger text-sm font-medium border border-danger/30 hover:bg-danger/20 transition-colors"
+            >
+              Voglio eliminare il mio account
+            </button>
+          ) : (
+            <div className="space-y-3 p-4 rounded-xl bg-danger/5 border border-danger/20">
+              <div className="flex items-start gap-2">
+                <AlertTriangle size={16} className="text-danger flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-danger">Conferma inserendo la tua password</p>
+              </div>
+              {deleteMsg && (
+                <p className="text-sm text-danger">{deleteMsg}</p>
+              )}
+              <input
+                type="password"
+                value={deletePassword}
+                onChange={(e) => setDeletePassword(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl bg-bg-secondary border border-danger/30 text-text-primary text-sm focus:outline-none focus:border-danger focus:ring-1 focus:ring-danger"
+                placeholder="La tua password"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={async () => {
+                    setDeleting(true);
+                    setDeleteMsg(null);
+                    try {
+                      const res = await fetch("/api/auth/delete-account", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ password: deletePassword }),
+                      });
+                      const data = await res.json();
+                      if (res.ok) {
+                        await signOut({ callbackUrl: "/login" });
+                      } else {
+                        setDeleteMsg(data.error);
+                      }
+                    } catch {
+                      setDeleteMsg("Errore di connessione");
+                    } finally {
+                      setDeleting(false);
+                    }
+                  }}
+                  disabled={deleting || !deletePassword}
+                  className="px-5 py-2 rounded-xl bg-danger text-white text-sm font-medium flex items-center gap-2 hover:bg-danger/90 transition-colors disabled:opacity-50"
+                >
+                  {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                  Elimina Definitivamente
+                </button>
+                <button
+                  onClick={() => { setDeleteConfirm(false); setDeletePassword(""); setDeleteMsg(null); }}
+                  className="px-5 py-2 rounded-xl bg-bg-secondary text-text-secondary text-sm font-medium hover:text-text-primary transition-colors"
+                >
+                  Annulla
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Info */}
       <div className="p-6 rounded-xl bg-bg-card border border-border space-y-2">
         <h2 className="font-semibold text-text-primary">Info</h2>
@@ -342,22 +624,6 @@ export default function ImpostazioniPage() {
           </span>
         </div>
       </div>
-
-      {/* Save button */}
-      <button
-        onClick={handleSave}
-        disabled={saving}
-        className="w-full py-3 rounded-xl bg-accent text-white font-medium flex items-center justify-center gap-2 hover:bg-accent-light transition-colors disabled:opacity-50"
-      >
-        {saving ? (
-          <Loader2 size={18} className="animate-spin" />
-        ) : saved ? (
-          <Check size={18} />
-        ) : (
-          <Save size={18} />
-        )}
-        {saved ? "Salvato!" : "Salva Impostazioni"}
-      </button>
     </div>
   );
 }

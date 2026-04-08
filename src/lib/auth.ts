@@ -70,7 +70,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         path.startsWith("/login") ||
         path.startsWith("/registrati") ||
         path.startsWith("/landing") ||
-        path.startsWith("/api/auth");
+        path.startsWith("/password-dimenticata") ||
+        path.startsWith("/reset-password") ||
+        path.startsWith("/api/auth") ||
+        path.startsWith("/api/cron");
 
       if (isPublic) return true;
       return isLoggedIn;
