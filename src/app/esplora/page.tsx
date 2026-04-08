@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { PlatformFilter } from "@/components/platform-filter";
+import { GenreFilter } from "@/components/genre-filter";
 import { SeriesGrid } from "@/components/series-grid";
 import { TrendingUp, Sparkles, Star } from "lucide-react";
 import type { TMDBSeries } from "@/lib/tmdb";
@@ -17,9 +18,24 @@ export default function EsploraPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [watchlistIds, setWatchlistIds] = useState<Set<number>>(new Set());
+  const [excludedGenres, setExcludedGenres] = useState<Set<number>>(new Set());
+  const genresLoaded = useRef(false);
 
-  // Fetch watchlist IDs
+  // Load excluded genres + watchlist on mount
   useEffect(() => {
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.excluded_genres) {
+          try {
+            const ids: number[] = JSON.parse(data.excluded_genres);
+            setExcludedGenres(new Set(ids));
+          } catch { /* ignore */ }
+        }
+        genresLoaded.current = true;
+      })
+      .catch(() => { genresLoaded.current = true; });
+
     fetch("/api/watchlist")
       .then((r) => r.json())
       .then((data) => {
@@ -30,21 +46,35 @@ export default function EsploraPage() {
       .catch(() => {});
   }, []);
 
+  // Save excluded genres when they change
+  const handleExcludedGenresChange = (genres: Set<number>) => {
+    setExcludedGenres(genres);
+    setPage(1);
+    // Save to user settings (non-blocking)
+    fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ excluded_genres: JSON.stringify([...genres]) }),
+    }).catch(() => {});
+  };
+
   // Fetch series
   const fetchSeries = useCallback(async () => {
     setLoading(true);
     try {
       let url: string;
+      const withoutGenres = excludedGenres.size > 0 ? [...excludedGenres].join(",") : "";
 
       if (tab === "trending" && !platform) {
-        // Trending without platform: use TMDB trending endpoint
         url = `/api/tmdb/trending?page=${page}&window=week`;
       } else {
-        // All other cases: use discover endpoint (works with or without provider)
         const params = new URLSearchParams({ page: String(page) });
 
         if (platform) {
           params.set("provider", String(platform));
+        }
+        if (withoutGenres) {
+          params.set("withoutGenres", withoutGenres);
         }
 
         if (tab === "trending") {
@@ -66,18 +96,27 @@ export default function EsploraPage() {
 
       const res = await fetch(url);
       const data = await res.json();
-      setSeriesList(data.results || []);
+      let results: TMDBSeries[] = data.results || [];
+
+      // Client-side filter for trending (no server-side support)
+      if (tab === "trending" && !platform && excludedGenres.size > 0) {
+        results = results.filter(
+          (s) => !s.genre_ids?.every((gid) => excludedGenres.has(gid))
+        );
+      }
+
+      setSeriesList(results);
       setTotalPages(data.total_pages || 1);
     } catch {
       setSeriesList([]);
     } finally {
       setLoading(false);
     }
-  }, [tab, platform, page]);
+  }, [tab, platform, page, excludedGenres]);
 
   useEffect(() => {
     setPage(1);
-  }, [tab, platform]);
+  }, [tab, platform, excludedGenres]);
 
   useEffect(() => {
     fetchSeries();
@@ -139,8 +178,9 @@ export default function EsploraPage() {
         ))}
       </div>
 
-      {/* Platform filter */}
+      {/* Filters */}
       <PlatformFilter selected={platform} onChange={setPlatform} />
+      <GenreFilter excludedGenres={excludedGenres} onChange={handleExcludedGenresChange} />
 
       {/* Grid */}
       <SeriesGrid

@@ -148,6 +148,7 @@ export async function discoverByProvider(
     minVoteCount?: number;
     dateFrom?: string;
     dateTo?: string;
+    withoutGenres?: string;
   } = {}
 ): Promise<TMDBResponse<TMDBSeries>> {
   const params: Record<string, string> = {
@@ -163,6 +164,7 @@ export async function discoverByProvider(
   if (options.minVoteCount) params["vote_count.gte"] = String(options.minVoteCount);
   if (options.dateFrom) params["first_air_date.gte"] = options.dateFrom;
   if (options.dateTo) params["first_air_date.lte"] = options.dateTo;
+  if (options.withoutGenres) params.without_genres = options.withoutGenres;
 
   return tmdbFetch("/discover/tv", params);
 }

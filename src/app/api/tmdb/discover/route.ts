@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
   const minVoteCount = Number(req.nextUrl.searchParams.get("minVoteCount") || "0");
   const dateFrom = req.nextUrl.searchParams.get("from") || undefined;
   const dateTo = req.nextUrl.searchParams.get("to") || undefined;
+  const withoutGenres = req.nextUrl.searchParams.get("withoutGenres") || undefined;
 
   try {
     const data = await discoverByProvider(providerId, {
@@ -19,6 +20,7 @@ export async function GET(req: NextRequest) {
       minVoteCount: minVoteCount || undefined,
       dateFrom,
       dateTo,
+      withoutGenres,
     });
     return NextResponse.json(data);
   } catch (error) {
