@@ -7,6 +7,9 @@ import {
   platforms,
   rotationPlans,
   settings,
+  movieWatchlist,
+  movies,
+  moviePlatforms,
 } from "@/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { getSessionUser, unauthorized } from "@/lib/get-user";
@@ -148,6 +151,42 @@ export async function GET(req: NextRequest) {
         priority: item.watchlist.priority,
         status: item.watchlist.status!,
         remainingEpisodes,
+        episodeRunTime: runtime,
+        totalHours: Math.round(totalMinutes / 60 * 10) / 10,
+        platformIds,
+      });
+    }
+
+    // 4b. Add movies
+    const movieItems = await db
+      .select()
+      .from(movieWatchlist)
+      .innerJoin(movies, eq(movieWatchlist.movieId, movies.id))
+      .where(and(eq(movieWatchlist.userId, user.id), inArray(movieWatchlist.status, ["to_watch"])));
+
+    for (const item of movieItems) {
+      const runtime = item.movies.runtime || 120;
+      const totalMinutes = runtime;
+
+      const platformLinks = await db
+        .select({ platformId: moviePlatforms.platformId })
+        .from(moviePlatforms)
+        .where(eq(moviePlatforms.movieId, item.movies.id));
+
+      const platformIds = platformLinks
+        .map((pl) => pl.platformId)
+        .filter((pid) => {
+          const p = platformById.get(pid);
+          return p && !excludedSlugs.includes(p.slug);
+        });
+
+      seriesInfoList.push({
+        seriesId: item.movies.id,
+        tmdbId: item.movies.tmdbId,
+        name: item.movies.title,
+        priority: item.movie_watchlist.priority,
+        status: item.movie_watchlist.status!,
+        remainingEpisodes: 1,
         episodeRunTime: runtime,
         totalHours: Math.round(totalMinutes / 60 * 10) / 10,
         platformIds,

@@ -2,34 +2,42 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Star, Plus, Check } from "lucide-react";
-import { imageUrl, GENRE_MAP } from "@/lib/tmdb";
-import type { TMDBSeries } from "@/lib/tmdb";
+import { Star, Plus, Check, Film, Tv } from "lucide-react";
+import { imageUrl, getGenreMap } from "@/lib/tmdb";
+import type { TMDBMediaItem } from "@/lib/tmdb";
 import type { PlatformConfig } from "@/lib/platforms";
 
-interface SeriesCardProps {
-  series: TMDBSeries;
+interface MediaCardProps {
+  item: TMDBMediaItem;
   providers?: { id: number; name: string; logo: string }[];
-  /** Platforms to show as small dots on the poster */
   platformDots?: PlatformConfig[];
   inWatchlist?: boolean;
-  onToggleWatchlist?: (tmdbId: number) => void;
+  onToggleWatchlist?: (tmdbId: number, mediaType: "movie" | "tv") => void;
   compact?: boolean;
+  showTypeBadge?: boolean;
 }
 
-export function SeriesCard({
-  series,
+export function SeriesCard(props: MediaCardProps) {
+  return <MediaCard {...props} />;
+}
+
+export function MediaCard({
+  item,
   providers,
   platformDots,
   inWatchlist,
   onToggleWatchlist,
   compact,
-}: SeriesCardProps) {
-  const year = series.first_air_date?.slice(0, 4) || "N/A";
-  const genres = series.genre_ids
+  showTypeBadge = false,
+}: MediaCardProps) {
+  const year = item.date?.slice(0, 4) || "N/A";
+  const genreMap = getGenreMap(item.mediaType);
+  const genres = item.genreIds
     ?.slice(0, 2)
-    .map((id) => GENRE_MAP[id])
+    .map((id) => genreMap[id])
     .filter(Boolean);
+  const detailUrl = item.mediaType === "movie" ? `/film/${item.id}` : `/serie/${item.id}`;
+  const isMovie = item.mediaType === "movie";
 
   return (
     <div
@@ -38,25 +46,34 @@ export function SeriesCard({
       }`}
     >
       {/* Poster */}
-      <Link href={`/serie/${series.id}`}>
-        <div
-          className={`relative ${compact ? "aspect-[2/3]" : "aspect-[2/3]"}`}
-        >
+      <Link href={detailUrl}>
+        <div className="relative aspect-[2/3]">
           <Image
-            src={imageUrl(series.poster_path, compact ? "w342" : "w500")}
-            alt={series.name}
+            src={imageUrl(item.posterPath, compact ? "w342" : "w500")}
+            alt={item.title}
             fill
             className="object-cover"
             sizes={compact ? "160px" : "(max-width: 768px) 50vw, 200px"}
           />
-          {/* Gradient overlay */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
           {/* Rating badge */}
           <div className="absolute top-2 left-2 flex items-center gap-1 bg-black/70 backdrop-blur-sm rounded-full px-2 py-0.5 text-xs">
             <Star size={12} className="text-warning fill-warning" />
-            <span>{series.vote_average?.toFixed(1)}</span>
+            <span>{item.voteAverage?.toFixed(1)}</span>
           </div>
+
+          {/* Type badge */}
+          {showTypeBadge && (
+            <div className={`absolute top-2 left-16 flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+              isMovie
+                ? "bg-purple-500/80 text-white"
+                : "bg-accent/80 text-white"
+            }`}>
+              {isMovie ? <Film size={10} /> : <Tv size={10} />}
+              {isMovie ? "Film" : "Serie"}
+            </div>
+          )}
 
           {/* Platform dots */}
           {platformDots && platformDots.length > 0 && (
@@ -86,7 +103,7 @@ export function SeriesCard({
         <button
           onClick={(e) => {
             e.preventDefault();
-            onToggleWatchlist(series.id);
+            onToggleWatchlist(item.id, item.mediaType);
           }}
           className={`absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
             inWatchlist
@@ -100,13 +117,13 @@ export function SeriesCard({
 
       {/* Info */}
       <div className={`p-3 ${compact ? "p-2" : "p-3"}`}>
-        <Link href={`/serie/${series.id}`}>
+        <Link href={detailUrl}>
           <h3
             className={`font-semibold text-text-primary truncate hover:text-accent-light transition-colors ${
               compact ? "text-xs" : "text-sm"
             }`}
           >
-            {series.name}
+            {item.title}
           </h3>
         </Link>
         <div className="flex items-center gap-2 mt-1">
@@ -118,7 +135,6 @@ export function SeriesCard({
           )}
         </div>
 
-        {/* Provider badges */}
         {providers && providers.length > 0 && !compact && (
           <div className="flex flex-wrap gap-1 mt-2">
             {providers.map((p) => (

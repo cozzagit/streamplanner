@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { watchlist, series, seriesPlatforms, platforms, settings, rotationPlans } from "@/db/schema";
+import { watchlist, series, seriesPlatforms, platforms, settings, rotationPlans, movieWatchlist, movies, moviePlatforms } from "@/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { getSessionUser, unauthorized } from "@/lib/get-user";
 
@@ -93,18 +93,6 @@ export async function GET() {
       .innerJoin(series, eq(watchlist.seriesId, series.id))
       .where(and(eq(watchlist.userId, user.id), inArray(watchlist.status, ["to_watch", "watching"])));
 
-    if (items.length === 0) {
-      return NextResponse.json({
-        schedule: {},
-        stats: {
-          totalEpisodes: 0, totalHours: 0,
-          scheduledEpisodes: 0, scheduledHours: 0,
-          daysNeeded: 0, seriesCount: 0,
-          weeklyHours, allScheduled: true,
-        },
-      });
-    }
-
     // 3. Load platforms
     const allPlatforms = await db.select().from(platforms);
     const platformById = new Map(allPlatforms.map((p) => [p.id, p]));
@@ -150,6 +138,65 @@ export async function GET() {
         isAlwaysAvailable,
         activeFromMonth: null,
         activeUntilMonth: null,
+      });
+    }
+
+    // 4b. Add movies to the content list (treated as single-episode items)
+    const movieItems = await db
+      .select()
+      .from(movieWatchlist)
+      .innerJoin(movies, eq(movieWatchlist.movieId, movies.id))
+      .where(and(eq(movieWatchlist.userId, user.id), inArray(movieWatchlist.status, ["to_watch"])));
+
+    for (const item of movieItems) {
+      const runtime = item.movies.runtime || 120;
+
+      const platformLinks = await db
+        .select({ platformId: moviePlatforms.platformId })
+        .from(moviePlatforms)
+        .where(eq(moviePlatforms.movieId, item.movies.id));
+
+      const moviePlatformInfos = platformLinks
+        .map((pl) => platformById.get(pl.platformId))
+        .filter((p) => p && !excludedSlugs.includes(p.slug));
+
+      const activeSub = moviePlatformInfos.find((p) => p && activeSubSlugs.includes(p.slug));
+      const freePlatform = moviePlatformInfos.find((p) => p && p.isFree);
+      const alwaysOn = moviePlatformInfos.find((p) => p && alwaysOnSlugs.includes(p.slug));
+      const bestPaid = moviePlatformInfos.find((p) => p && !p.isFree && !activeSubSlugs.includes(p.slug) && !alwaysOnSlugs.includes(p.slug));
+      const bestPlatform = activeSub || freePlatform || alwaysOn || bestPaid || null;
+      const isAlwaysAvailable = !!(activeSub || freePlatform || alwaysOn);
+
+      allSeries.push({
+        seriesName: item.movies.title,
+        seriesTmdbId: item.movies.tmdbId,
+        posterPath: item.movies.posterPath,
+        watchlistId: item.movie_watchlist.id,
+        priority: item.movie_watchlist.priority,
+        status: item.movie_watchlist.status!,
+        runtime,
+        totalEpisodes: 1,
+        watchedEpisodes: 0,
+        remainingEpisodes: 1,
+        scheduledEpisodes: 0,
+        platformSlug: bestPlatform?.slug || null,
+        platformName: bestPlatform?.name || null,
+        platformColor: bestPlatform?.color || null,
+        isAlwaysAvailable,
+        activeFromMonth: null,
+        activeUntilMonth: null,
+      });
+    }
+
+    if (allSeries.length === 0) {
+      return NextResponse.json({
+        schedule: {},
+        stats: {
+          totalEpisodes: 0, totalHours: 0,
+          scheduledEpisodes: 0, scheduledHours: 0,
+          daysNeeded: 0, seriesCount: 0,
+          weeklyHours, allScheduled: true,
+        },
       });
     }
 

@@ -92,6 +92,82 @@ export const series = pgTable("series", {
     .defaultNow(),
 });
 
+// ─── Movies (cache from TMDB) ────────────────────────────────
+export const movies = pgTable("movies", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tmdbId: integer("tmdb_id").notNull().unique(),
+  title: text("title").notNull(),
+  originalTitle: text("original_title"),
+  overview: text("overview"),
+  posterPath: text("poster_path"),
+  backdropPath: text("backdrop_path"),
+  releaseDate: text("release_date"),
+  status: text("status"),
+  runtime: integer("runtime"), // minutes
+  voteAverage: real("vote_average"),
+  voteCount: integer("vote_count"),
+  popularity: real("popularity"),
+  genres: text("genres"), // JSON
+  lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+// ─── Movies ↔ Platform availability ─────────────────────────
+export const moviePlatforms = pgTable(
+  "movie_platforms",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    movieId: uuid("movie_id")
+      .notNull()
+      .references(() => movies.id, { onDelete: "cascade" }),
+    platformId: uuid("platform_id")
+      .notNull()
+      .references(() => platforms.id, { onDelete: "cascade" }),
+    monetizationType: text("monetization_type").notNull().default("flatrate"),
+    lastCheckedAt: timestamp("last_checked_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("movie_platform_unique").on(
+      table.movieId,
+      table.platformId,
+      table.monetizationType
+    ),
+  ]
+);
+
+// ─── Movie Watchlist (per user) ─────────────────────────────
+export const movieWatchlist = pgTable(
+  "movie_watchlist",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    movieId: uuid("movie_id")
+      .notNull()
+      .references(() => movies.id, { onDelete: "cascade" }),
+    status: watchStatusEnum("status").notNull().default("to_watch"),
+    priority: priorityEnum("priority").notNull().default("medium"),
+    notes: text("notes"),
+    addedAt: timestamp("added_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("movie_watchlist_user_movie_unique").on(table.userId, table.movieId),
+  ]
+);
+
 // ─── Series ↔ Platform availability ─────────────────────────
 export const seriesPlatforms = pgTable(
   "series_platforms",

@@ -28,14 +28,14 @@ const FEATURES = [
     icon: Search,
     title: "Esplora e Cerca",
     description:
-      "Sfoglia le serie trending, nuove e top rated. Cerca qualsiasi serie e scopri su quali piattaforme e disponibile in Italia.",
+      "Sfoglia serie TV e film trending, nuovi e top rated. Cerca qualsiasi titolo e scopri su quali piattaforme e disponibile in Italia.",
     color: "#6366f1",
   },
   {
     icon: List,
     title: "Watchlist Smart",
     description:
-      "Aggiungi serie, imposta priorita e traccia il progresso con lo slider stagioni. Segna le stagioni gia viste con un tap.",
+      "Aggiungi serie TV e film, imposta priorita e traccia il progresso. Serie con slider stagioni, film con un tap.",
     color: "#22c55e",
   },
   {
@@ -168,7 +168,7 @@ export default function HomePage() {
           <p className="text-lg sm:text-xl text-text-secondary max-w-2xl mx-auto leading-relaxed">
             StreamPlanner ti dice quali piattaforme attivare questo mese
             e quali puoi tranquillamente cancellare.
-            Guarda le tue serie, ruota gli abbonamenti,{" "}
+            Guarda le tue serie TV e film, ruota gli abbonamenti,{" "}
             <span className="text-success font-semibold">risparmia centinaia di euro all&apos;anno</span>.
           </p>
 
