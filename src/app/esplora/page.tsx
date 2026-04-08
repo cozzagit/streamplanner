@@ -65,7 +65,9 @@ export default function EsploraPage() {
       let url: string;
       const withoutGenres = excludedGenres.size > 0 ? [...excludedGenres].join(",") : "";
 
-      if (tab === "trending" && !platform) {
+      // When genres are excluded or platform is set, always use discover
+      // (trending endpoint doesn't support without_genres)
+      if (tab === "trending" && !platform && !withoutGenres) {
         url = `/api/tmdb/trending?page=${page}&window=week`;
       } else {
         const params = new URLSearchParams({ page: String(page) });
@@ -96,16 +98,7 @@ export default function EsploraPage() {
 
       const res = await fetch(url);
       const data = await res.json();
-      let results: TMDBSeries[] = data.results || [];
-
-      // Client-side filter for trending (no server-side support)
-      if (tab === "trending" && !platform && excludedGenres.size > 0) {
-        results = results.filter(
-          (s) => !s.genre_ids?.some((gid) => excludedGenres.has(gid))
-        );
-      }
-
-      setSeriesList(results);
+      setSeriesList(data.results || []);
       setTotalPages(data.total_pages || 1);
     } catch {
       setSeriesList([]);
