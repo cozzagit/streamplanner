@@ -535,89 +535,84 @@ export default function SerieDetailPage({
         </div>
       </div>
 
-      {/* Overview */}
-      {detail.overview && (
-        <div>
-          <h2 className="text-lg font-semibold text-text-primary mb-2">
-            Trama
-          </h2>
-          <p className="text-text-secondary leading-relaxed">
-            {detail.overview}
-          </p>
-        </div>
-      )}
-
-      {/* Where to watch — primary monetization, stays high */}
-      <div>
-        <h2 className="text-lg font-semibold text-text-primary mb-3">
-          Dove Guardarla in Italia
-        </h2>
-        {allProviders.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-            {allProviders.map((p) => {
-              const platformInfo = getPlatformByTmdbId(p.provider_id);
-              const isActive = platformInfo && activeSubs.includes(platformInfo.slug);
-              const outboundUrl = platformInfo ? getPlatformUrl(platformInfo) : null;
-              return (
-                <a
-                  key={`${p.provider_id}-${p.type}`}
-                  href={outboundUrl || "#"}
-                  target="_blank"
-                  rel="noopener noreferrer sponsored"
-                  className={`group flex items-center gap-3 p-4 rounded-xl bg-bg-card border transition-all hover:scale-[1.02] hover:shadow-lg ${
-                    isActive ? "border-success/50 hover:border-success" : "border-border hover:border-accent/50"
-                  }`}
-                >
-                  {p.logo_path && (
-                    <Image
-                      src={imageUrl(p.logo_path, "w92")}
-                      alt={p.provider_name}
-                      width={40}
-                      height={40}
-                      className="rounded-lg"
-                    />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-text-primary flex items-center gap-2">
-                      <span className="truncate">{p.provider_name}</span>
-                      {isActive && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/10 text-success font-bold flex-shrink-0">
-                          ATTIVO
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-xs text-text-secondary">{p.type}</p>
-                    {platformInfo && !isActive && (
-                      <p className="text-xs text-accent-light">
-                        {platformInfo.isFree
-                          ? "Gratis"
-                          : `da \u20AC${platformInfo.monthlyPrice.toFixed(2)}/mese`}
-                      </p>
-                    )}
-                    {isActive && (
-                      <p className="text-xs text-success">Hai gia questo abbonamento</p>
-                    )}
-                  </div>
-                  <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <span className="text-xs px-3 py-1.5 rounded-lg font-medium text-white"
-                      style={{ backgroundColor: platformInfo?.color || '#6366f1' }}>
-                      Guarda su {platformInfo?.name?.split(" ")[0] || p.provider_name} <ExternalLink size={10} className="inline ml-1 -mt-0.5" />
-                    </span>
-                  </div>
-                </a>
-              );
-            })}
+      {/* Overview + Where to watch — two columns on desktop */}
+      <div className="grid grid-cols-1 md:grid-cols-[1fr,auto] gap-6">
+        {/* Left: Trama */}
+        {detail.overview && (
+          <div>
+            <h2 className="text-lg font-semibold text-text-primary mb-2">
+              Trama
+            </h2>
+            <p className="text-text-secondary leading-relaxed">
+              {detail.overview}
+            </p>
           </div>
-        ) : (
-          <p className="text-text-secondary">
-            Non disponibile in streaming in Italia al momento
-          </p>
         )}
-        {allProviders.length > 0 && (
-          <p className="text-[10px] text-text-secondary/40 mt-2">
-            Alcuni link potrebbero essere affiliati. Disponibilita fornita da JustWatch.
-          </p>
-        )}
+
+        {/* Right: Dove Guardarla */}
+        <div className="md:w-72 lg:w-80">
+          <h2 className="text-lg font-semibold text-text-primary mb-3">
+            Dove Guardarla
+          </h2>
+          {allProviders.length > 0 ? (
+            <div className="space-y-2">
+              {allProviders.map((p) => {
+                const platformInfo = getPlatformByTmdbId(p.provider_id);
+                const isActive = platformInfo && activeSubs.includes(platformInfo.slug);
+                const outboundUrl = platformInfo ? getPlatformUrl(platformInfo) : null;
+                return (
+                  <a
+                    key={`${p.provider_id}-${p.type}`}
+                    href={outboundUrl || "#"}
+                    target="_blank"
+                    rel="noopener noreferrer sponsored"
+                    className={`group flex items-center gap-3 p-3 rounded-xl bg-bg-card border transition-all hover:scale-[1.02] hover:shadow-lg ${
+                      isActive ? "border-success/50 hover:border-success" : "border-border hover:border-accent/50"
+                    }`}
+                  >
+                    {p.logo_path && (
+                      <Image
+                        src={imageUrl(p.logo_path, "w92")}
+                        alt={p.provider_name}
+                        width={36}
+                        height={36}
+                        className="rounded-lg"
+                      />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-text-primary flex items-center gap-1.5">
+                        <span className="truncate">{p.provider_name}</span>
+                        {isActive && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-success/10 text-success font-bold flex-shrink-0">
+                            ATTIVO
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-[11px] text-text-secondary">
+                        {p.type}
+                        {platformInfo && !isActive && !platformInfo.isFree && (
+                          <span className="text-accent-light"> · €{platformInfo.monthlyPrice.toFixed(2)}/mese</span>
+                        )}
+                        {platformInfo?.isFree && <span className="text-success"> · Gratis</span>}
+                        {isActive && <span className="text-success"> · Abbonato</span>}
+                      </p>
+                    </div>
+                    <ExternalLink size={14} className="text-text-secondary/30 group-hover:text-accent-light transition-colors flex-shrink-0" />
+                  </a>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-text-secondary">
+              Non disponibile in streaming in Italia
+            </p>
+          )}
+          {allProviders.length > 0 && (
+            <p className="text-[10px] text-text-secondary/40 mt-2">
+              Alcuni link potrebbero essere affiliati.
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Trailer & News tabs */}
