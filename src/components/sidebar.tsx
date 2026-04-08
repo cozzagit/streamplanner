@@ -16,6 +16,7 @@ import {
   Tv,
   LogOut,
   User,
+  ShieldAlert,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -115,9 +116,9 @@ export function Sidebar() {
         </nav>
 
         {/* User footer */}
-        <div className="p-4 border-t border-border space-y-3">
+        <div className="p-4 border-t border-border space-y-2">
           {session?.user && (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 mb-1">
               <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center">
                 <User size={14} className="text-accent-light" />
               </div>
@@ -130,6 +131,20 @@ export function Sidebar() {
                 </p>
               </div>
             </div>
+          )}
+          {(session?.user as Record<string, unknown> | undefined)?.role === "admin" && (
+            <Link
+              href="/admin"
+              onClick={() => setMobileOpen(false)}
+              className={`flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm transition-colors ${
+                pathname === "/admin"
+                  ? "bg-warning/15 text-warning"
+                  : "text-text-secondary hover:text-warning hover:bg-warning/10"
+              }`}
+            >
+              <ShieldAlert size={16} />
+              Admin
+            </Link>
           )}
           <button
             onClick={() => signOut({ callbackUrl: "/login" })}
