@@ -12,10 +12,12 @@ import {
   ArrowLeft,
   Loader2,
   ExternalLink,
+  Play,
+  Newspaper,
 } from "lucide-react";
 import { imageUrl, GENRE_MAP } from "@/lib/tmdb";
-import { getPlatformByTmdbId } from "@/lib/platforms";
-import type { TMDBSeriesDetail, TMDBWatchProviderCountry } from "@/lib/tmdb";
+import { getPlatformByTmdbId, getPlatformUrl } from "@/lib/platforms";
+import type { TMDBSeriesDetail, TMDBWatchProviderCountry, TMDBVideo } from "@/lib/tmdb";
 
 function WatchedProgress({
   watchlistId,
@@ -118,6 +120,112 @@ function WatchedProgress({
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Lazy-loaded YouTube trailer — shows thumbnail, loads iframe on click */
+function YouTubeTrailer({ video }: { video: TMDBVideo }) {
+  const [playing, setPlaying] = useState(false);
+
+  if (playing) {
+    return (
+      <div className="aspect-video rounded-xl overflow-hidden">
+        <iframe
+          src={`https://www.youtube-nocookie.com/embed/${video.key}?autoplay=1&rel=0`}
+          title={video.name}
+          allow="autoplay; encrypted-media"
+          allowFullScreen
+          className="w-full h-full"
+          loading="lazy"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setPlaying(true)}
+      className="relative aspect-video rounded-xl overflow-hidden group w-full"
+    >
+      <img
+        src={`https://img.youtube.com/vi/${video.key}/hqdefault.jpg`}
+        alt={video.name}
+        className="w-full h-full object-cover"
+        loading="lazy"
+      />
+      <div className="absolute inset-0 bg-black/40 flex items-center justify-center group-hover:bg-black/50 transition-colors">
+        <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center group-hover:scale-110 transition-transform">
+          <Play size={28} className="text-white fill-white ml-1" />
+        </div>
+      </div>
+      <div className="absolute bottom-3 left-3 right-3">
+        <p className="text-white text-sm font-medium truncate drop-shadow-lg">{video.name}</p>
+      </div>
+    </button>
+  );
+}
+
+/** News feed for a series — fetches from our API */
+function SeriesNews({ seriesName }: { seriesName: string }) {
+  const [articles, setArticles] = useState<
+    { title: string; link: string; source: string; date: string }[]
+  >([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchNews = async () => {
+      try {
+        const res = await fetch(
+          `/api/news?q=${encodeURIComponent(seriesName + " serie tv")}&_t=${Date.now()}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setArticles(data.articles || []);
+        }
+      } catch {
+        /* ignore */
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchNews();
+  }, [seriesName]);
+
+  if (loading) {
+    return (
+      <div className="space-y-3">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-16 rounded-xl skeleton" />
+        ))}
+      </div>
+    );
+  }
+
+  if (articles.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      {articles.map((article, i) => (
+        <a
+          key={i}
+          href={article.link}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-start gap-3 p-3 rounded-xl bg-bg-card border border-border hover:border-accent/50 transition-colors group"
+        >
+          <Newspaper size={16} className="text-accent-light flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-text-primary group-hover:text-accent-light transition-colors line-clamp-2">
+              {article.title}
+            </p>
+            <p className="text-[10px] text-text-secondary mt-1">
+              {article.source} {article.date && `· ${article.date}`}
+            </p>
+          </div>
+          <ExternalLink size={12} className="text-text-secondary/30 flex-shrink-0 mt-1" />
+        </a>
+      ))}
     </div>
   );
 }
@@ -387,6 +495,36 @@ export default function SerieDetailPage({
         </div>
       )}
 
+      {/* Trailer */}
+      {(() => {
+        const trailers = (detail.videos?.results || [])
+          .filter((v) => v.site === "YouTube" && (v.type === "Trailer" || v.type === "Teaser"))
+          .sort((a, b) => (a.type === "Trailer" ? -1 : 1));
+        if (trailers.length === 0) return null;
+        return (
+          <div>
+            <h2 className="text-lg font-semibold text-text-primary mb-3 flex items-center gap-2">
+              <Play size={18} className="text-accent-light" />
+              Trailer
+            </h2>
+            <div className={`grid gap-3 ${trailers.length > 1 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1 max-w-2xl"}`}>
+              {trailers.slice(0, 4).map((v) => (
+                <YouTubeTrailer key={v.id} video={v} />
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* News */}
+      <div>
+        <h2 className="text-lg font-semibold text-text-primary mb-3 flex items-center gap-2">
+          <Newspaper size={18} className="text-accent-light" />
+          Ultime Notizie
+        </h2>
+        <SeriesNews seriesName={detail.name} />
+      </div>
+
       {/* Where to watch */}
       <div>
         <h2 className="text-lg font-semibold text-text-primary mb-3">
@@ -397,11 +535,15 @@ export default function SerieDetailPage({
             {allProviders.map((p) => {
               const platformInfo = getPlatformByTmdbId(p.provider_id);
               const isActive = platformInfo && activeSubs.includes(platformInfo.slug);
+              const outboundUrl = platformInfo ? getPlatformUrl(platformInfo) : null;
               return (
-                <div
+                <a
                   key={`${p.provider_id}-${p.type}`}
-                  className={`flex items-center gap-3 p-4 rounded-xl bg-bg-card border ${
-                    isActive ? "border-success/50" : "border-border"
+                  href={outboundUrl || "#"}
+                  target="_blank"
+                  rel="noopener noreferrer sponsored"
+                  className={`group flex items-center gap-3 p-4 rounded-xl bg-bg-card border transition-all hover:scale-[1.02] hover:shadow-lg ${
+                    isActive ? "border-success/50 hover:border-success" : "border-border hover:border-accent/50"
                   }`}
                 >
                   {p.logo_path && (
@@ -413,11 +555,11 @@ export default function SerieDetailPage({
                       className="rounded-lg"
                     />
                   )}
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <p className="font-medium text-text-primary flex items-center gap-2">
-                      {p.provider_name}
+                      <span className="truncate">{p.provider_name}</span>
                       {isActive && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/10 text-success font-bold">
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/10 text-success font-bold flex-shrink-0">
                           ATTIVO
                         </span>
                       )}
@@ -434,7 +576,13 @@ export default function SerieDetailPage({
                       <p className="text-xs text-success">Hai gia questo abbonamento</p>
                     )}
                   </div>
-                </div>
+                  <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span className="text-xs px-3 py-1.5 rounded-lg font-medium text-white"
+                      style={{ backgroundColor: platformInfo?.color || '#6366f1' }}>
+                      Guarda su {platformInfo?.name?.split(" ")[0] || p.provider_name} <ExternalLink size={10} className="inline ml-1 -mt-0.5" />
+                    </span>
+                  </div>
+                </a>
               );
             })}
           </div>
@@ -443,15 +591,10 @@ export default function SerieDetailPage({
             Non disponibile in streaming in Italia al momento
           </p>
         )}
-        {italyProviders?.link && (
-          <a
-            href={italyProviders.link}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-accent-light text-sm mt-3 hover:underline"
-          >
-            Vedi su TMDB <ExternalLink size={14} />
-          </a>
+        {allProviders.length > 0 && (
+          <p className="text-[10px] text-text-secondary/40 mt-2">
+            Alcuni link potrebbero essere affiliati. Disponibilita fornita da JustWatch.
+          </p>
         )}
       </div>
 

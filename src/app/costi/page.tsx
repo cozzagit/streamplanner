@@ -13,8 +13,9 @@ import {
   ChevronRight,
   Clock,
   CheckCircle,
+  ExternalLink,
 } from "lucide-react";
-import { getPaidPlatforms, getFreePlatforms } from "@/lib/platforms";
+import { getPaidPlatforms, getFreePlatforms, getPlatformBySlug, getPlatformUrl } from "@/lib/platforms";
 
 interface ActiveSubEntry {
   name: string;
@@ -259,6 +260,8 @@ export default function CostiPage() {
           <div className="space-y-2">
             {[...platformUsage.values()].map((p) => {
               const totalCost = p.monthlyPrice * p.months;
+              const platformConfig = getPlatformBySlug(p.slug);
+              const outboundUrl = platformConfig ? getPlatformUrl(platformConfig) : null;
               return (
                 <div key={p.slug} className="flex items-center gap-4 p-4 rounded-xl bg-bg-card border border-border">
                   <div
@@ -277,9 +280,20 @@ export default function CostiPage() {
                       {p.totalHours}h &middot; {p.months} {p.months === 1 ? "mese" : "mesi"}
                     </p>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right flex flex-col items-end gap-1.5">
                     <p className="font-bold text-text-primary">&euro;{p.monthlyPrice.toFixed(2)}/mese</p>
                     <p className="text-xs text-text-secondary">Totale: &euro;{totalCost.toFixed(2)}</p>
+                    {outboundUrl && (
+                      <a
+                        href={outboundUrl}
+                        target="_blank"
+                        rel="noopener noreferrer sponsored"
+                        className="inline-flex items-center gap-1 text-[11px] px-3 py-1 rounded-lg font-medium text-white transition-opacity hover:opacity-90"
+                        style={{ backgroundColor: p.color }}
+                      >
+                        Abbonati <ExternalLink size={10} />
+                      </a>
+                    )}
                   </div>
                 </div>
               );
@@ -296,15 +310,22 @@ export default function CostiPage() {
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {freePlatforms.map((p) => (
-              <div key={p.slug} className="p-4 rounded-xl bg-bg-card border border-border">
+              <a
+                key={p.slug}
+                href={getPlatformUrl(p)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-4 rounded-xl bg-bg-card border border-border hover:border-accent/50 transition-colors group"
+              >
                 <div className="flex items-center gap-3">
                   <span className="text-xl">{p.icon}</span>
-                  <div>
+                  <div className="flex-1">
                     <p className="font-medium text-text-primary">{p.name}</p>
                     <p className="text-xs text-success">GRATIS</p>
                   </div>
+                  <ExternalLink size={14} className="text-text-secondary/30 group-hover:text-accent-light transition-colors" />
                 </div>
-              </div>
+              </a>
             ))}
           </div>
         </div>
@@ -335,6 +356,11 @@ export default function CostiPage() {
           </p>
         </div>
       </div>
+
+      {/* Affiliate disclosure */}
+      <p className="text-[10px] text-text-secondary/40">
+        Alcuni link potrebbero essere affiliati. StreamPlanner potrebbe ricevere una commissione senza costi aggiuntivi per te.
+      </p>
     </div>
   );
 }

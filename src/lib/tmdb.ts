@@ -46,6 +46,9 @@ export interface TMDBSeriesDetail {
   "watch/providers"?: {
     results: Record<string, TMDBWatchProviderCountry>;
   };
+  videos?: {
+    results: TMDBVideo[];
+  };
 }
 
 export interface TMDBSeason {
@@ -88,6 +91,16 @@ export interface TMDBWatchProviderCountry {
 export interface TMDBGenre {
   id: number;
   name: string;
+}
+
+export interface TMDBVideo {
+  id: string;
+  key: string;
+  name: string;
+  site: string;
+  type: string;
+  official: boolean;
+  published_at: string;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -165,7 +178,7 @@ export async function searchSeries(
 /** Get full details + watch providers for a series */
 export async function getSeriesDetail(tmdbId: number): Promise<TMDBSeriesDetail> {
   return tmdbFetch(`/tv/${tmdbId}`, {
-    append_to_response: "watch/providers",
+    append_to_response: "watch/providers,videos",
   });
 }
 

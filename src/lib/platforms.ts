@@ -11,6 +11,10 @@ export interface PlatformConfig {
   monthlyPrice: number;
   isFree: boolean;
   icon: string;
+  /** Direct URL to the platform's website / signup page */
+  websiteUrl: string;
+  /** Affiliate tracking URL — falls back to websiteUrl if empty */
+  affiliateUrl?: string;
 }
 
 export const TRACKED_PLATFORMS: PlatformConfig[] = [
@@ -22,6 +26,7 @@ export const TRACKED_PLATFORMS: PlatformConfig[] = [
     monthlyPrice: 7.99,
     isFree: false,
     icon: "🎬",
+    websiteUrl: "https://www.netflix.com/it/",
   },
   {
     tmdbId: 119,
@@ -31,6 +36,8 @@ export const TRACKED_PLATFORMS: PlatformConfig[] = [
     monthlyPrice: 4.99,
     isFree: false,
     icon: "📦",
+    websiteUrl: "https://www.amazon.it/prime",
+    affiliateUrl: "https://www.amazon.it/prime?tag=streamplanner-21",
   },
   {
     tmdbId: 337,
@@ -40,6 +47,7 @@ export const TRACKED_PLATFORMS: PlatformConfig[] = [
     monthlyPrice: 5.99,
     isFree: false,
     icon: "🏰",
+    websiteUrl: "https://www.disneyplus.com/it-it",
   },
   {
     tmdbId: 350,
@@ -49,6 +57,7 @@ export const TRACKED_PLATFORMS: PlatformConfig[] = [
     monthlyPrice: 9.99,
     isFree: false,
     icon: "🍎",
+    websiteUrl: "https://tv.apple.com/it",
   },
   {
     tmdbId: 531,
@@ -58,6 +67,7 @@ export const TRACKED_PLATFORMS: PlatformConfig[] = [
     monthlyPrice: 7.99,
     isFree: false,
     icon: "⛰️",
+    websiteUrl: "https://www.paramountplus.com/it/",
   },
   {
     tmdbId: 1796,
@@ -67,6 +77,7 @@ export const TRACKED_PLATFORMS: PlatformConfig[] = [
     monthlyPrice: 6.99,
     isFree: false,
     icon: "📺",
+    websiteUrl: "https://www.nowtv.it/",
   },
   {
     tmdbId: 283,
@@ -76,6 +87,7 @@ export const TRACKED_PLATFORMS: PlatformConfig[] = [
     monthlyPrice: 4.99,
     isFree: false,
     icon: "🍥",
+    websiteUrl: "https://www.crunchyroll.com/it",
   },
   {
     tmdbId: 584,
@@ -85,6 +97,7 @@ export const TRACKED_PLATFORMS: PlatformConfig[] = [
     monthlyPrice: 3.99,
     isFree: false,
     icon: "🔍",
+    websiteUrl: "https://www.discoveryplus.com/it",
   },
   {
     tmdbId: 11,
@@ -94,6 +107,7 @@ export const TRACKED_PLATFORMS: PlatformConfig[] = [
     monthlyPrice: 7.99,
     isFree: false,
     icon: "🎬",
+    websiteUrl: "https://mubi.com/it",
   },
   {
     tmdbId: 222,
@@ -103,6 +117,7 @@ export const TRACKED_PLATFORMS: PlatformConfig[] = [
     monthlyPrice: 0,
     isFree: true,
     icon: "📡",
+    websiteUrl: "https://www.raiplay.it/",
   },
   {
     tmdbId: 300,
@@ -112,6 +127,7 @@ export const TRACKED_PLATFORMS: PlatformConfig[] = [
     monthlyPrice: 0,
     isFree: true,
     icon: "🪐",
+    websiteUrl: "https://pluto.tv/it/",
   },
   {
     tmdbId: 359,
@@ -121,6 +137,7 @@ export const TRACKED_PLATFORMS: PlatformConfig[] = [
     monthlyPrice: 0,
     isFree: true,
     icon: "♾️",
+    websiteUrl: "https://www.mediasetinfinity.mediaset.it/",
   },
 ];
 
@@ -148,4 +165,9 @@ export function getPaidPlatforms(): PlatformConfig[] {
 /** Get free platforms */
 export function getFreePlatforms(): PlatformConfig[] {
   return TRACKED_PLATFORMS.filter((p) => p.isFree);
+}
+
+/** Get the best outbound URL for a platform (affiliate if available, otherwise website) */
+export function getPlatformUrl(platform: PlatformConfig): string {
+  return platform.affiliateUrl || platform.websiteUrl;
 }
