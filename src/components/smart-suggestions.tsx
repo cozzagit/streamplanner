@@ -42,9 +42,44 @@ export function SmartSuggestions() {
   const [added, setAdded] = useState<Set<number>>(new Set());
 
   useEffect(() => {
-    fetch(`/api/suggestions?_t=${Date.now()}`)
-      .then((r) => r.json())
-      .then(setData)
+    // Fetch suggestions + real schedule to get accurate hours per month
+    Promise.all([
+      fetch(`/api/suggestions?_t=${Date.now()}`).then((r) => r.json()),
+      fetch(`/api/schedule?_t=${Date.now()}`).then((r) => r.json()),
+    ])
+      .then(([sugData, schedData]) => {
+        if (sugData?.months && schedData?.schedule) {
+          // Aggregate actual scheduled minutes per month from the real calendar
+          const realMinutesByMonth = new Map<string, number>();
+          for (const [dateStr, entries] of Object.entries(
+            schedData.schedule as Record<string, { minutes: number }[]>
+          )) {
+            const parts = dateStr.split("-");
+            const key = `${parseInt(parts[0])}-${parseInt(parts[1])}`;
+            const dayMins = (entries || []).reduce((s, e) => s + (e.minutes || 0), 0);
+            realMinutesByMonth.set(key, (realMinutesByMonth.get(key) || 0) + dayMins);
+          }
+
+          // Override confirmedHours with real schedule data
+          // The schedule already handles rotation windows correctly
+          for (const month of sugData.months) {
+            const key = `${month.year}-${month.month}`;
+            const realMins = realMinutesByMonth.get(key) || 0;
+            const realHours = Math.round(realMins / 60);
+            // All scheduled hours are "real" — the schedule already excluded
+            // platforms not yet confirmed. Put them in confirmedHours.
+            month.confirmedHours = Math.min(realHours, month.availableHours);
+            month.rotationHours = 0;
+          }
+
+          // Recalculate totalFreeHours
+          sugData.stats.totalFreeHours = sugData.months.reduce(
+            (a: number, m: MonthData) => a + Math.max(0, m.availableHours - m.confirmedHours),
+            0
+          );
+        }
+        setData(sugData);
+      })
       .catch(() => setData(null))
       .finally(() => setLoading(false));
   }, []);
