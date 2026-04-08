@@ -5,6 +5,7 @@ import { PlatformFilter } from "@/components/platform-filter";
 import { SeriesGrid } from "@/components/series-grid";
 import { TrendingUp, Sparkles, Star } from "lucide-react";
 import type { TMDBSeries } from "@/lib/tmdb";
+import { getPlatformByTmdbId } from "@/lib/platforms";
 
 type Tab = "trending" | "new" | "top";
 
@@ -147,6 +148,7 @@ export default function EsploraPage() {
         watchlistIds={watchlistIds}
         onToggleWatchlist={toggleWatchlist}
         loading={loading}
+        platformDots={platform ? [getPlatformByTmdbId(platform)].filter(Boolean) as import("@/lib/platforms").PlatformConfig[] : undefined}
       />
 
       {/* Pagination */}

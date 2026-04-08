@@ -5,10 +5,13 @@ import Link from "next/link";
 import { Star, Plus, Check } from "lucide-react";
 import { imageUrl, GENRE_MAP } from "@/lib/tmdb";
 import type { TMDBSeries } from "@/lib/tmdb";
+import type { PlatformConfig } from "@/lib/platforms";
 
 interface SeriesCardProps {
   series: TMDBSeries;
   providers?: { id: number; name: string; logo: string }[];
+  /** Platforms to show as small dots on the poster */
+  platformDots?: PlatformConfig[];
   inWatchlist?: boolean;
   onToggleWatchlist?: (tmdbId: number) => void;
   compact?: boolean;
@@ -17,6 +20,7 @@ interface SeriesCardProps {
 export function SeriesCard({
   series,
   providers,
+  platformDots,
   inWatchlist,
   onToggleWatchlist,
   compact,
@@ -53,6 +57,27 @@ export function SeriesCard({
             <Star size={12} className="text-warning fill-warning" />
             <span>{series.vote_average?.toFixed(1)}</span>
           </div>
+
+          {/* Platform dots */}
+          {platformDots && platformDots.length > 0 && (
+            <div className="absolute bottom-2 left-2 flex gap-1">
+              {platformDots.slice(0, 3).map((p) => (
+                <div
+                  key={p.tmdbId}
+                  title={p.name}
+                  className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white shadow-md border border-white/20"
+                  style={{ backgroundColor: p.color }}
+                >
+                  {p.name.charAt(0)}
+                </div>
+              ))}
+              {platformDots.length > 3 && (
+                <div className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white bg-black/70 backdrop-blur-sm shadow-md border border-white/20">
+                  +{platformDots.length - 3}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </Link>
 

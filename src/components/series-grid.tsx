@@ -2,12 +2,15 @@
 
 import { SeriesCard } from "./series-card";
 import type { TMDBSeries } from "@/lib/tmdb";
+import type { PlatformConfig } from "@/lib/platforms";
 
 interface SeriesGridProps {
   series: TMDBSeries[];
   watchlistIds?: Set<number>;
   onToggleWatchlist?: (tmdbId: number) => void;
   loading?: boolean;
+  /** Platform dots to show on all cards (e.g. when filtering by platform) */
+  platformDots?: PlatformConfig[];
 }
 
 export function SeriesGrid({
@@ -15,6 +18,7 @@ export function SeriesGrid({
   watchlistIds,
   onToggleWatchlist,
   loading,
+  platformDots,
 }: SeriesGridProps) {
   if (loading) {
     return (
@@ -50,6 +54,7 @@ export function SeriesGrid({
           series={s}
           inWatchlist={watchlistIds?.has(s.id)}
           onToggleWatchlist={onToggleWatchlist}
+          platformDots={platformDots}
         />
       ))}
     </div>
