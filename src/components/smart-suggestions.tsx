@@ -140,7 +140,7 @@ export function SmartSuggestions() {
           <Clock size={16} className="text-accent-light" />
         </div>
         <div className="flex-1">
-          <p className="text-sm font-semibold text-text-primary">Capacita Visione</p>
+          <p className="text-sm font-semibold text-text-primary">Il tuo mese in streaming</p>
           <p className="text-[11px] text-text-secondary">
             {stats.confirmedHours || 0}h sicure
             {(stats.rotationHours || 0) > 0 && <span className="text-accent-light"> + {stats.rotationHours}h con rotazione</span>}
@@ -217,7 +217,7 @@ export function SmartSuggestions() {
           <div className="flex items-center gap-2 mb-2">
             <Lightbulb size={14} className="text-accent-light" />
             <p className="text-xs text-text-secondary">
-              Riempi il calendario — le migliori serie sui tuoi abbonamenti
+              Cosa guardare questo mese — le migliori sui tuoi abbonamenti
             </p>
           </div>
 

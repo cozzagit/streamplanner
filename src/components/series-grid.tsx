@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { Tv } from "lucide-react";
 import { SeriesCard } from "./series-card";
 import type { TMDBSeries } from "@/lib/tmdb";
 import type { PlatformConfig } from "@/lib/platforms";
@@ -39,9 +41,15 @@ export function SeriesGrid({
   if (series.length === 0) {
     return (
       <div className="text-center py-16">
-        <p className="text-text-secondary text-lg">
-          Nessuna serie trovata
-        </p>
+        <Tv size={48} className="mx-auto text-text-secondary/20 mb-4" />
+        <p className="text-text-secondary text-lg">Nessuna serie trovata</p>
+        <p className="text-text-secondary/60 text-sm mt-1">Prova a cambiare i filtri o a cercare qualcosa di diverso</p>
+        <Link
+          href="/esplora"
+          className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-accent text-white rounded-lg text-sm hover:bg-accent-light transition-colors"
+        >
+          Esplora le serie
+        </Link>
       </div>
     );
   }

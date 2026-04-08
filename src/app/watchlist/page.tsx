@@ -45,10 +45,10 @@ interface WatchlistItem {
 }
 
 const STATUS_CONFIG = {
-  to_watch: { label: "Da Vedere", icon: Eye, color: "text-accent-light" },
-  watching: { label: "In Corso", icon: Play, color: "text-warning" },
-  completed: { label: "Completata", icon: CheckCircle, color: "text-success" },
-  dropped: { label: "Abbandonata", icon: XCircle, color: "text-danger" },
+  to_watch: { label: "Da vedere", icon: Eye, color: "text-accent-light" },
+  watching: { label: "Sto guardando", icon: Play, color: "text-warning" },
+  completed: { label: "Vista", icon: CheckCircle, color: "text-success" },
+  dropped: { label: "Non era per me", icon: XCircle, color: "text-danger" },
 };
 
 const PRIORITY_CONFIG = {

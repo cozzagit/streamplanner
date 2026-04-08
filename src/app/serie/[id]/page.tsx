@@ -537,12 +537,12 @@ export default function SerieDetailPage({
 
       {/* Overview + Where to watch — two columns on desktop */}
       <div className="grid grid-cols-1 md:grid-cols-[1fr_20rem] gap-6 items-start">
-        {/* Left: Trama */}
+        {/* Left: Di cosa parla */}
         <div>
           {detail.overview && (
             <>
               <h2 className="text-lg font-semibold text-text-primary mb-2">
-                Trama
+                Di cosa parla
               </h2>
               <p className="text-text-secondary leading-relaxed">
                 {detail.overview}
@@ -551,10 +551,10 @@ export default function SerieDetailPage({
           )}
         </div>
 
-        {/* Right: Dove Guardarla */}
+        {/* Right: Dove vederla */}
         <div>
           <h2 className="text-lg font-semibold text-text-primary mb-3">
-            Dove Guardarla
+            Dove vederla
           </h2>
           {allProviders.length > 0 ? (
             <div className="space-y-2">
@@ -611,8 +611,8 @@ export default function SerieDetailPage({
           )}
           {allProviders.length > 0 && (
             <p className="text-[10px] text-text-secondary/40 mt-2">
-              Alcuni link potrebbero essere affiliati.
-            </p>
+              Potremmo ricevere una piccola commissione — non ti costa nulla in piu.
+  </p>
           )}
         </div>
       </div>

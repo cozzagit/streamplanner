@@ -63,7 +63,8 @@ export default function RegisterPage() {
             <Tv size={32} className="text-white" />
           </div>
           <h1 className="text-2xl font-bold text-text-primary">StreamPlanner</h1>
-          <p className="text-text-secondary mt-1">Crea il tuo account</p>
+          <p className="text-text-secondary mt-1">Inizia a risparmiare sullo streaming.</p>
+          <p className="text-text-secondary/50 text-xs mt-1">Account gratuito in 30 secondi</p>
         </div>
 
         {/* Error */}
@@ -78,7 +79,7 @@ export default function RegisterPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-text-primary mb-1">
-              Nome
+              Come ti chiami?
             </label>
             <input
               type="text"
@@ -104,7 +105,7 @@ export default function RegisterPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-text-primary mb-1">
-              Password
+              Scegli una password
             </label>
             <input
               type="password"
@@ -113,7 +114,7 @@ export default function RegisterPage() {
               required
               minLength={6}
               className="w-full px-4 py-3 rounded-xl bg-bg-card border border-border text-text-primary placeholder-text-secondary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-              placeholder="Minimo 6 caratteri"
+              placeholder="Almeno 6 caratteri"
             />
           </div>
           <button
@@ -122,14 +123,14 @@ export default function RegisterPage() {
             className="w-full py-3 rounded-xl bg-accent text-white font-medium flex items-center justify-center gap-2 hover:bg-accent-light transition-colors disabled:opacity-50"
           >
             {loading && <Loader2 size={18} className="animate-spin" />}
-            {loading ? "Registrazione..." : "Registrati"}
+            {loading ? "Creazione account..." : "Crea il mio account gratuito"}
           </button>
         </form>
 
         <p className="text-center text-sm text-text-secondary">
-          Hai gia un account?{" "}
+          Sei gia dei nostri?{" "}
           <Link href="/login" className="text-accent-light hover:underline">
-            Accedi
+            Entra
           </Link>
         </p>
         <p className="text-center">

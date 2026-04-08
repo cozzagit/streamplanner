@@ -42,7 +42,7 @@ export default function LoginPage() {
             <Tv size={32} className="text-white" />
           </div>
           <h1 className="text-2xl font-bold text-text-primary">StreamPlanner</h1>
-          <p className="text-text-secondary mt-1">Accedi al tuo account</p>
+          <p className="text-text-secondary mt-1">Bentornato.</p>
         </div>
 
         {/* Error */}
@@ -74,7 +74,7 @@ export default function LoginPage() {
                 Password
               </label>
               <Link href="/password-dimenticata" className="text-xs text-accent-light hover:underline">
-                Password dimenticata?
+                Non ricordi la password?
               </Link>
             </div>
             <input
@@ -92,14 +92,14 @@ export default function LoginPage() {
             className="w-full py-3 rounded-xl bg-accent text-white font-medium flex items-center justify-center gap-2 hover:bg-accent-light transition-colors disabled:opacity-50"
           >
             {loading && <Loader2 size={18} className="animate-spin" />}
-            {loading ? "Accesso..." : "Accedi"}
+            {loading ? "Accesso..." : "Entra in StreamPlanner"}
           </button>
         </form>
 
         <p className="text-center text-sm text-text-secondary">
-          Non hai un account?{" "}
+          Prima volta qui?{" "}
           <Link href="/registrati" className="text-accent-light hover:underline">
-            Registrati
+            Inizia gratis
           </Link>
         </p>
         <p className="text-center">

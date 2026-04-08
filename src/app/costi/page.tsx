@@ -149,7 +149,7 @@ export default function CostiPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-text-primary flex items-center gap-2">
           <DollarSign size={24} />
-          Costi & Risparmio
+          Quanto stai spendendo?
         </h1>
         <Link
           href="/impostazioni"
@@ -352,14 +352,14 @@ export default function CostiPage() {
         </div>
         <div className="mt-4 p-4 rounded-lg bg-success/10 border border-success/30">
           <p className="text-success font-bold text-lg">
-            Risparmio annuo: &euro;{(savings * 12).toFixed(2)}
+            A fine anno avrai in tasca &euro;{(savings * 12).toFixed(2)} in piu
           </p>
         </div>
       </div>
 
       {/* Affiliate disclosure */}
       <p className="text-[10px] text-text-secondary/40">
-        Alcuni link potrebbero essere affiliati. StreamPlanner potrebbe ricevere una commissione senza costi aggiuntivi per te.
+        Potremmo ricevere una piccola commissione dai link — non ti costa nulla in piu.
       </p>
     </div>
   );

@@ -367,10 +367,10 @@ export default function PlannerPage() {
 
                 {/* Month indicator */}
                 <div
-                  className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold"
+                  className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-white text-[10px] font-bold uppercase tracking-wide"
                   style={{ backgroundColor: plan.mainPlatform.color }}
                 >
-                  {plan.month}
+                  {new Date(plan.year, plan.month - 1).toLocaleDateString("it-IT", { month: "short" }).slice(0, 3)}
                 </div>
 
                 {/* Plan card */}

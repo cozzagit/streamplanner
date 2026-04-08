@@ -158,17 +158,18 @@ export default function HomePage() {
           </div>
 
           <h1 className="text-4xl sm:text-5xl md:text-7xl font-bold tracking-tight">
-            <span className="text-text-primary">Smetti di pagare</span>
+            <span className="text-text-primary">Guarda tutto.</span>
             <br />
             <span className="bg-gradient-to-r from-accent via-accent-light to-purple-400 bg-clip-text text-transparent">
-              abbonamenti che non usi
+              Paga la meta.
             </span>
           </h1>
 
           <p className="text-lg sm:text-xl text-text-secondary max-w-2xl mx-auto leading-relaxed">
-            Traccia le serie, segna il progresso per stagione, e ottieni il piano perfetto:
-            quale piattaforma attivare ogni mese, cosa guardare ogni giorno,{" "}
-            <span className="text-success font-semibold">risparmiando fino al 60%</span>.
+            StreamPlanner ti dice quali piattaforme attivare questo mese
+            e quali puoi tranquillamente cancellare.
+            Guarda le tue serie, ruota gli abbonamenti,{" "}
+            <span className="text-success font-semibold">risparmia centinaia di euro all&apos;anno</span>.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
@@ -176,7 +177,7 @@ export default function HomePage() {
               href="/registrati"
               className="group flex items-center gap-2 px-8 py-4 rounded-2xl bg-accent text-white font-semibold text-lg hover:bg-accent-light transition-all hover:shadow-lg hover:shadow-accent/25"
             >
-              Inizia Gratis
+              Inizia a risparmiare
               <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
             </Link>
             <Link
@@ -188,7 +189,7 @@ export default function HomePage() {
           </div>
 
           <p className="text-sm text-text-secondary/60 pt-2">
-            Gratuito. Nessuna carta richiesta. Dati da TMDB e JustWatch.
+            Nessuna carta di credito. Nessun vincolo. Solo risparmi.
           </p>
         </div>
 

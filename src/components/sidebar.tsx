@@ -20,14 +20,34 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-const NAV_ITEMS = [
-  { href: "/esplora", label: "Esplora", icon: Compass },
-  { href: "/cerca", label: "Cerca", icon: Search },
-  { href: "/watchlist", label: "Watchlist", icon: List },
-  { href: "/planner", label: "Rotation Planner", icon: RotateCcw },
-  { href: "/calendario", label: "Calendario", icon: CalendarDays },
-  { href: "/costi", label: "Costi & Risparmio", icon: DollarSign },
-  { href: "/impostazioni", label: "Impostazioni", icon: Settings },
+const NAV_GROUPS = [
+  {
+    label: "Scopri",
+    items: [
+      { href: "/esplora", label: "Esplora", icon: Compass },
+      { href: "/cerca", label: "Cerca", icon: Search },
+    ],
+  },
+  {
+    label: "Libreria",
+    items: [
+      { href: "/watchlist", label: "Watchlist", icon: List },
+    ],
+  },
+  {
+    label: "Pianifica",
+    items: [
+      { href: "/planner", label: "Planner", icon: RotateCcw },
+      { href: "/calendario", label: "Calendario", icon: CalendarDays },
+      { href: "/costi", label: "Costi e Risparmio", icon: DollarSign },
+    ],
+  },
+  {
+    label: "",
+    items: [
+      { href: "/impostazioni", label: "Impostazioni", icon: Settings },
+    ],
+  },
 ];
 
 export function Sidebar() {
@@ -90,29 +110,39 @@ export function Sidebar() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-4 space-y-1">
-          {NAV_ITEMS.map((item) => {
-            const isActive =
-              pathname === item.href ||
-              (item.href !== "/" && pathname.startsWith(item.href));
-            const Icon = item.icon;
-
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  isActive
-                    ? "bg-accent/15 text-accent-light"
-                    : "text-text-secondary hover:text-text-primary hover:bg-bg-card"
-                }`}
-              >
-                <Icon size={18} />
-                {item.label}
-              </Link>
-            );
-          })}
+        <nav className="flex-1 p-4 space-y-4 overflow-y-auto">
+          {NAV_GROUPS.map((group, gi) => (
+            <div key={gi}>
+              {group.label && (
+                <p className="text-[10px] uppercase tracking-widest text-text-secondary/40 font-medium px-3 mb-1.5">
+                  {group.label}
+                </p>
+              )}
+              <div className="space-y-0.5">
+                {group.items.map((item) => {
+                  const isActive =
+                    pathname === item.href ||
+                    (item.href !== "/" && pathname.startsWith(item.href));
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setMobileOpen(false)}
+                      className={`flex items-center gap-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                        isActive
+                          ? "bg-accent/15 text-accent-light border-l-2 border-accent pl-2.5 pr-3"
+                          : "text-text-secondary hover:text-text-primary hover:bg-bg-card px-3"
+                      }`}
+                    >
+                      <Icon size={18} />
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
 
         {/* User footer */}

@@ -139,7 +139,7 @@ export default function EsploraPage() {
 
   const TABS = [
     { key: "trending" as Tab, label: "Trending", icon: TrendingUp },
-    { key: "new" as Tab, label: "Novita", icon: Sparkles },
+    { key: "new" as Tab, label: "Novità", icon: Sparkles },
     { key: "top" as Tab, label: "Top Rated", icon: Star },
   ];
 
@@ -176,6 +176,7 @@ export default function EsploraPage() {
       <GenreFilter excludedGenres={excludedGenres} onChange={handleExcludedGenresChange} />
 
       {/* Grid */}
+      <div key={`${tab}-${platform}-${page}`} className="fade-in">
       <SeriesGrid
         series={seriesList}
         watchlistIds={watchlistIds}
@@ -183,12 +184,13 @@ export default function EsploraPage() {
         loading={loading}
         platformDots={platform ? [getPlatformByTmdbId(platform)].filter(Boolean) as import("@/lib/platforms").PlatformConfig[] : undefined}
       />
+      </div>
 
       {/* Pagination */}
       {!loading && totalPages > 1 && (
         <div className="flex items-center justify-center gap-4 pt-4">
           <button
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            onClick={() => { setPage((p) => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }}
             disabled={page <= 1}
             className="px-4 py-2 rounded-lg bg-bg-card border border-border text-sm disabled:opacity-40 hover:bg-bg-card-hover transition-colors"
           >
@@ -198,7 +200,7 @@ export default function EsploraPage() {
             Pagina {page} di {Math.min(totalPages, 500)}
           </span>
           <button
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            onClick={() => { setPage((p) => Math.min(totalPages, p + 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }}
             disabled={page >= totalPages}
             className="px-4 py-2 rounded-lg bg-bg-card border border-border text-sm disabled:opacity-40 hover:bg-bg-card-hover transition-colors"
           >
