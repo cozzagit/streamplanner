@@ -18,7 +18,6 @@ import {
   Circle,
 } from "lucide-react";
 import { imageUrl } from "@/lib/tmdb";
-import { SmartSuggestions } from "@/components/smart-suggestions";
 
 /** Format date as YYYY-MM-DD in local time (avoids UTC shift from toISOString) */
 function localDateStr(date: Date): string {
@@ -239,9 +238,6 @@ function ScheduleView() {
 
   return (
     <div className="space-y-4">
-      {/* Smart suggestions if calendar is light */}
-      <SmartSuggestions />
-
       {/* Stats bar */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="p-3 rounded-xl bg-bg-card border border-border text-center">
