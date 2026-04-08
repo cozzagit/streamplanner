@@ -90,20 +90,18 @@ export async function GET() {
   const confirmedHours = Math.round(confirmedMinutes / 60);
   const rotationHours = Math.round(rotationMinutes / 60);
 
-  // Build monthly capacity with confirmed vs rotation split
+  // Build monthly capacity
   const now = new Date();
-  const months: {
-    label: string; month: number; year: number;
-    availableHours: number; confirmedHours: number; rotationHours: number;
-  }[] = [];
-  let confLeft = confirmedHours;
-  let rotLeft = rotationHours;
+  const lateInMonth = now.getDate() > 7;
 
+  // First pass: calculate available hours per month
+  const monthSlots: {
+    label: string; month: number; year: number; available: number;
+  }[] = [];
   for (let i = 0; i < 6; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
     const label = d.toLocaleDateString("it-IT", { month: "short" }).replace(".", "");
     const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-
     let available = 0;
     for (let day = 1; day <= daysInMonth; day++) {
       if (i === 0 && day < now.getDate()) continue;
@@ -111,22 +109,37 @@ export async function GET() {
       const dayKeys = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"];
       available += weeklySchedule[dayKeys[dayDate.getDay()]] || 0;
     }
-
-    // Fill with confirmed first, then rotation
-    const conf = Math.min(confLeft, available);
-    confLeft = Math.max(0, confLeft - available);
-    const remainingSlot = Math.max(0, available - conf);
-    const rot = Math.min(rotLeft, remainingSlot);
-    rotLeft = Math.max(0, rotLeft - remainingSlot);
-
-    months.push({
+    monthSlots.push({
       label: label.charAt(0).toUpperCase() + label.slice(1),
       month: d.getMonth() + 1,
       year: d.getFullYear(),
-      availableHours: Math.round(available),
-      confirmedHours: Math.round(conf),
-      rotationHours: Math.round(rot),
+      available: Math.round(available),
     });
+  }
+
+  // Distribute confirmed hours (active subs): fill from current month forward
+  const months: {
+    label: string; month: number; year: number;
+    availableHours: number; confirmedHours: number; rotationHours: number;
+  }[] = monthSlots.map((s) => ({
+    ...s, availableHours: s.available, confirmedHours: 0, rotationHours: 0,
+  }));
+
+  let confLeft = confirmedHours;
+  for (const m of months) {
+    const conf = Math.min(confLeft, m.availableHours);
+    m.confirmedHours = conf;
+    confLeft -= conf;
+  }
+
+  // Distribute rotation hours: start from month index 1 if late in current month
+  const rotStartIdx = lateInMonth ? 1 : 0;
+  let rotLeft = rotationHours;
+  for (let i = rotStartIdx; i < months.length; i++) {
+    const freeSlot = Math.max(0, months[i].availableHours - months[i].confirmedHours);
+    const rot = Math.min(rotLeft, freeSlot);
+    months[i].rotationHours = rot;
+    rotLeft -= rot;
   }
 
   // Fetch suggestions: unified across all active platforms, deduplicated

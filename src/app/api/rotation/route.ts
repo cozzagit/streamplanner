@@ -267,9 +267,11 @@ export async function GET(req: NextRequest) {
     });
 
     // 7. Build month-by-month plan
+    // If past day 7 of current month, rotation starts next month
+    // (not worth subscribing for the remaining days)
     const now = new Date();
     const plans = [];
-    let monthIndex = 0;
+    let monthIndex = now.getDate() > 7 ? 1 : 0;
 
     // Always-on cost
     const alwaysOnCost = coveredByAlwaysOn.reduce((sum, { platform }) => {
