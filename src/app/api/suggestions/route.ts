@@ -89,7 +89,7 @@ export async function GET() {
 
   const confirmedHours = Math.round(confirmedMinutes / 60);
   const rotationHours = Math.round(rotationMinutes / 60);
-  console.log("[suggestions] confirmed:", confirmedHours, "h, rotation:", rotationHours, "h, activeSlugs:", [...activeSlugs]);
+  // will log after months calculation
 
   // Build monthly capacity
   const now = new Date();
@@ -142,6 +142,8 @@ export async function GET() {
     months[i].rotationHours = rot;
     rotLeft -= rot;
   }
+
+  console.log("[suggestions]", JSON.stringify({ confirmedHours, rotationHours, months: months.map(m => ({ l: m.label, c: m.confirmedHours, r: m.rotationHours, a: m.availableHours })) }));
 
   // Fetch suggestions: unified across all active platforms, deduplicated
   const seenIds = new Set<number>();
