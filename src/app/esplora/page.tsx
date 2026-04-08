@@ -149,37 +149,39 @@ export default function EsploraPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-text-primary">Esplora</h1>
-        <p className="text-text-secondary mt-1">
-          Scopri le migliori {mediaType === "movie" ? "film" : "serie TV"} disponibili in streaming
-        </p>
-      </div>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-text-primary">Esplora</h1>
+          <p className="text-text-secondary mt-1">
+            Scopri le migliori {mediaType === "movie" ? "film" : "serie TV"} disponibili in streaming
+          </p>
+        </div>
 
-      {/* Media type selector */}
-      <div className="flex gap-1 p-1 rounded-xl bg-bg-card border border-border w-fit">
-        <button
-          onClick={() => setMediaType("tv")}
-          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-            mediaType === "tv"
-              ? "bg-accent text-white"
-              : "text-text-secondary hover:text-text-primary"
-          }`}
-        >
-          <Tv size={15} />
-          Serie TV
-        </button>
-        <button
-          onClick={() => setMediaType("movie")}
-          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-            mediaType === "movie"
-              ? "bg-purple-500 text-white"
-              : "text-text-secondary hover:text-text-primary"
-          }`}
-        >
-          <Film size={15} />
-          Film
-        </button>
+        {/* Media type selector — top right */}
+        <div className="flex gap-1 p-1 rounded-xl bg-bg-card border border-border flex-shrink-0">
+          <button
+            onClick={() => setMediaType("tv")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              mediaType === "tv"
+                ? "bg-accent text-white"
+                : "text-text-secondary hover:text-text-primary"
+            }`}
+          >
+            <Tv size={14} />
+            Serie TV
+          </button>
+          <button
+            onClick={() => setMediaType("movie")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              mediaType === "movie"
+                ? "bg-purple-500 text-white"
+                : "text-text-secondary hover:text-text-primary"
+            }`}
+          >
+            <Film size={14} />
+            Film
+          </button>
+        </div>
       </div>
 
       {/* Sub-tabs */}
