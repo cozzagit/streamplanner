@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { users, watchlist, series } from "@/db/schema";
+import { users, watchlist, series, settings } from "@/db/schema";
 import { eq, sql, desc, count } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
@@ -97,10 +97,40 @@ export async function GET() {
       })
       .from(watchlist)
       .groupBy(watchlist.priority),
+
   ]);
 
+  // Fetch user settings separately
+  const userSettingsRaw = await db
+    .select({ userId: settings.userId, key: settings.key, value: settings.value })
+    .from(settings)
+    .where(sql`${settings.key} IN ('active_subscriptions', 'weekly_schedule')`);
+
+  const settingsMap = new Map<string, { activeSubs: string[]; weeklyHours: number }>();
+  for (const s of userSettingsRaw) {
+    if (!settingsMap.has(s.userId)) {
+      settingsMap.set(s.userId, { activeSubs: [], weeklyHours: 0 });
+    }
+    const entry = settingsMap.get(s.userId)!;
+    if (s.key === "active_subscriptions") {
+      try { entry.activeSubs = JSON.parse(s.value); } catch { /* ignore */ }
+    }
+    if (s.key === "weekly_schedule") {
+      try {
+        const schedule = JSON.parse(s.value) as Record<string, number>;
+        entry.weeklyHours = Object.values(schedule).reduce((a, b) => a + b, 0);
+      } catch { /* ignore */ }
+    }
+  }
+
+  const enrichedUsers = allUsers.map((u) => ({
+    ...u,
+    activeSubs: settingsMap.get(u.id)?.activeSubs || [],
+    weeklyHours: settingsMap.get(u.id)?.weeklyHours || 0,
+  }));
+
   return NextResponse.json({
-    users: allUsers,
+    users: enrichedUsers,
     stats: {
       totalUsers: allUsers.length,
       totalWatchlistItems: totalWatchlistItems[0]?.count || 0,

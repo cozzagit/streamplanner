@@ -21,6 +21,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { imageUrl } from "@/lib/tmdb";
+import { getPlatformBySlug } from "@/lib/platforms";
 
 interface AdminData {
   users: {
@@ -30,6 +31,8 @@ interface AdminData {
     role: string;
     createdAt: string;
     watchlistCount: number;
+    activeSubs: string[];
+    weeklyHours: number;
   }[];
   stats: {
     totalUsers: number;
@@ -331,14 +334,34 @@ export default function AdminPage() {
                 <div className="text-right flex-shrink-0">
                   <p className="text-sm font-medium text-text-primary">{Number(u.watchlistCount)} serie</p>
                   <p className="text-[10px] text-text-secondary flex items-center gap-1 justify-end">
+                    <Clock size={9} />
+                    {u.weeklyHours}h/sett
+                    <span className="mx-0.5">·</span>
                     <Calendar size={9} />
                     {new Date(u.createdAt).toLocaleDateString("it-IT", {
                       day: "numeric",
                       month: "short",
-                      year: "numeric",
                     })}
                   </p>
                 </div>
+                {u.activeSubs.length > 0 && (
+                  <div className="flex gap-1 mt-1.5 w-full justify-end">
+                    {u.activeSubs.map((slug) => {
+                      const p = getPlatformBySlug(slug);
+                      if (!p) return null;
+                      return (
+                        <div
+                          key={slug}
+                          title={p.name}
+                          className="w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-bold text-white"
+                          style={{ backgroundColor: p.color }}
+                        >
+                          {p.name.charAt(0)}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             ))}
           </div>
