@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
     }
 
     const xml = await res.text();
-    const articles = parseRssXml(xml).slice(0, 8);
+    const articles = parseRssXml(xml).slice(0, 5);
 
     return NextResponse.json({ articles });
   } catch {

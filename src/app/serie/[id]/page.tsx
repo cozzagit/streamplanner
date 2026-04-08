@@ -547,15 +547,7 @@ export default function SerieDetailPage({
         </div>
       )}
 
-      {/* Trailer & News tabs */}
-      {(() => {
-        const trailers = (detail.videos?.results || [])
-          .filter((v) => v.site === "YouTube" && (v.type === "Trailer" || v.type === "Teaser"))
-          .sort((a, b) => (a.type === "Trailer" ? -1 : 1));
-        return <MediaTabs trailers={trailers} seriesName={detail.name} />;
-      })()}
-
-      {/* Where to watch */}
+      {/* Where to watch — primary monetization, stays high */}
       <div>
         <h2 className="text-lg font-semibold text-text-primary mb-3">
           Dove Guardarla in Italia
@@ -627,6 +619,14 @@ export default function SerieDetailPage({
           </p>
         )}
       </div>
+
+      {/* Trailer & News tabs */}
+      {(() => {
+        const trailers = (detail.videos?.results || [])
+          .filter((v) => v.site === "YouTube" && (v.type === "Trailer" || v.type === "Teaser"))
+          .sort((a, b) => (a.type === "Trailer" ? -1 : 1));
+        return <MediaTabs trailers={trailers} seriesName={detail.name} />;
+      })()}
 
       {/* Seasons */}
       {detail.seasons && detail.seasons.length > 0 && (
