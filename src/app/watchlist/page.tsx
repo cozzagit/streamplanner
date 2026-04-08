@@ -389,13 +389,16 @@ export default function WatchlistPage() {
                   <span className="absolute bottom-2 right-2 text-[10px] text-white/70 font-medium">
                     {item.series.numberOfSeasons}S &middot; {item.series.numberOfEpisodes}E
                   </span>
-                  {/* Delete button */}
+                  {/* Delete button — always visible on mobile, hover on desktop */}
                   <button
                     onClick={(e) => {
                       e.preventDefault();
-                      removeItem(item.series.tmdbId);
+                      e.stopPropagation();
+                      if (confirm(`Rimuovere "${item.series.name}" dalla watchlist?`)) {
+                        removeItem(item.series.tmdbId);
+                      }
                     }}
-                    className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/60 backdrop-blur-sm text-white/70 hover:text-danger hover:bg-danger/20 transition-all opacity-0 group-hover:opacity-100"
+                    className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/60 backdrop-blur-sm text-white/70 hover:text-danger hover:bg-danger/20 transition-all md:opacity-0 md:group-hover:opacity-100"
                   >
                     <Trash2 size={14} />
                   </button>
