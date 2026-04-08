@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Lightbulb, Plus, Loader2, Star, Clock } from "lucide-react";
 import { imageUrl } from "@/lib/tmdb";
+import { TRACKED_PLATFORMS } from "@/lib/platforms";
 
 interface MonthData {
   label: string;
@@ -46,35 +47,62 @@ export function SmartSuggestions() {
     Promise.all([
       fetch(`/api/suggestions?_t=${Date.now()}`).then((r) => r.json()),
       fetch(`/api/schedule?_t=${Date.now()}`).then((r) => r.json()),
+      fetch(`/api/settings?_t=${Date.now()}`).then((r) => r.json()),
     ])
-      .then(([sugData, schedData]) => {
+      .then(([sugData, schedData, settingsData]) => {
         if (sugData?.months && schedData?.schedule) {
-          // Aggregate actual scheduled minutes per month from the real calendar
-          const realMinutesByMonth = new Map<string, number>();
+          // Get active subscription slugs to distinguish confirmed vs rotation
+          let activeSlugs: string[] = [];
+          try { activeSlugs = JSON.parse(settingsData?.active_subscriptions || "[]"); } catch { /* */ }
+          const activeSet = new Set(activeSlugs);
+          // Build name→slug lookup and identify free platforms
+          const nameToSlug = new Map<string, string>();
+          const freeSlugs = new Set<string>();
+          for (const p of TRACKED_PLATFORMS) {
+            nameToSlug.set(p.name, p.slug);
+            if (p.isFree) freeSlugs.add(p.slug);
+          }
+
+          // Aggregate real scheduled minutes per month, split by platform type
+          const byMonth = new Map<string, { confirmed: number; rotation: number }>();
           for (const [dateStr, entries] of Object.entries(
-            schedData.schedule as Record<string, { minutes: number }[]>
+            schedData.schedule as Record<string, { minutes: number; platformName?: string }[]>
           )) {
             const parts = dateStr.split("-");
             const key = `${parseInt(parts[0])}-${parseInt(parts[1])}`;
-            const dayMins = (entries || []).reduce((s, e) => s + (e.minutes || 0), 0);
-            realMinutesByMonth.set(key, (realMinutesByMonth.get(key) || 0) + dayMins);
+            if (!byMonth.has(key)) byMonth.set(key, { confirmed: 0, rotation: 0 });
+            const bucket = byMonth.get(key)!;
+            for (const entry of entries) {
+              // Determine if this entry is on an active/free platform or rotation
+              const pName = entry.platformName || "";
+              const slug = nameToSlug.get(pName) || "";
+              const isActive = activeSet.has(slug) || freeSlugs.has(slug);
+              if (isActive) {
+                bucket.confirmed += entry.minutes || 0;
+              } else {
+                bucket.rotation += entry.minutes || 0;
+              }
+            }
           }
 
-          // Override confirmedHours with real schedule data
-          // The schedule already handles rotation windows correctly
+          // Override month data with real schedule
           for (const month of sugData.months) {
             const key = `${month.year}-${month.month}`;
-            const realMins = realMinutesByMonth.get(key) || 0;
-            const realHours = Math.round(realMins / 60);
-            // All scheduled hours are "real" — the schedule already excluded
-            // platforms not yet confirmed. Put them in confirmedHours.
-            month.confirmedHours = Math.min(realHours, month.availableHours);
-            month.rotationHours = 0;
+            const real = byMonth.get(key);
+            if (real) {
+              month.confirmedHours = Math.min(Math.round(real.confirmed / 60), month.availableHours);
+              month.rotationHours = Math.min(
+                Math.round(real.rotation / 60),
+                Math.max(0, month.availableHours - month.confirmedHours)
+              );
+            } else {
+              month.confirmedHours = 0;
+              month.rotationHours = 0;
+            }
           }
 
-          // Recalculate totalFreeHours
           sugData.stats.totalFreeHours = sugData.months.reduce(
-            (a: number, m: MonthData) => a + Math.max(0, m.availableHours - m.confirmedHours),
+            (a: number, m: MonthData) => a + Math.max(0, m.availableHours - m.confirmedHours - m.rotationHours),
             0
           );
         }
