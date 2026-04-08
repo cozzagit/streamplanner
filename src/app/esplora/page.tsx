@@ -101,7 +101,7 @@ export default function EsploraPage() {
       // Client-side filter for trending (no server-side support)
       if (tab === "trending" && !platform && excludedGenres.size > 0) {
         results = results.filter(
-          (s) => !s.genre_ids?.every((gid) => excludedGenres.has(gid))
+          (s) => !s.genre_ids?.some((gid) => excludedGenres.has(gid))
         );
       }
 
